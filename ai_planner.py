@@ -80,7 +80,7 @@ def _normalize(data):
     return plans
 
 
-def generate_response_plans(project_name, high_critical_risks, model_name="gemini-2.0-flash"):
+def generate_response_plans(project_name, high_critical_risks, model_name="gemini-3.5-flash"):
     """Call Gemini for High/Critical risks only. Never raises — returns fallback dict."""
     # safety filter: never send Low/Medium even if caller slips
     risks = [r for r in (high_critical_risks or []) if r.get("severity") in ("High", "Critical")]
@@ -94,13 +94,16 @@ def generate_response_plans(project_name, high_critical_risks, model_name="gemin
         return {"available": False, "error": "Missing GEMINI_API_KEY in .env", "plans": {}}
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=key)
-        model = genai.GenerativeModel(model_name)
-        resp = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json", "temperature": 0.3},
-            request_options={"timeout": 30},
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=key)
+        resp = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
         )
         raw = getattr(resp, "text", "") or ""
         _log(prompt, raw)
