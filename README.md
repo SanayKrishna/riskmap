@@ -1,48 +1,56 @@
 # Risk Register & Response Planner
 
-Standalone Flask app: score project risks with a 5×5 matrix, visualize on an interactive Plotly heat map, and generate Gemini response plans for High/Critical risks.
+I built this for a project management assignment: a small standalone Flask app that takes a list of project risks, scores them on a 5×5 matrix, plots them on an interactive heat map, and asks Gemini for concrete response plans for the serious ones.
 
-## Setup
+No shared code with anything else — everything here was written from scratch for this tool.
 
-Requires Python 3.10+.
+## Getting it running
+
+You'll need Python 3.10 or newer. Then:
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # then put your real key in .env
-python app.py          # http://127.0.0.1:5000
+cp .env.example .env   # then drop your real key into .env
+python app.py          # opens on http://127.0.0.1:5000
 ```
 
-`.env` (never committed — covered by `.gitignore`):
+Your `.env` should look like this:
 
 ```
 GEMINI_API_KEY=your_google_ai_studio_key
 SECRET_KEY=any_random_string
 ```
 
-> Key ethics: the key lives only in local `.env`, read via `os.getenv` in `ai_planner.py`. It is never hardcoded, never logged, and never pushed. `ai_log.txt` records only the prompt + model response text.
+One thing I was careful about: the API key only ever lives in your local `.env`. It's read with `os.getenv` inside `ai_planner.py`, never hardcoded, never printed to the page, and never pushed to git (`.gitignore` covers `.env`). The debug log `ai_log.txt` records the prompt and the model's reply so I could write up what happened — but never the key itself.
 
-## Use
+## How to use it
 
-- `GET /` — Upload JSON tab (drag-drop / file picker / paste + example) or Add Risks Manually tab (title, category, description, P/I sliders, removable cards).
-- `POST /analyze` — validates (integers 1–5, required fields), runs engine → heat map → AI, renders results.
-- `GET /export` — CSV download of the last analysis.
+Open `/` and you've got two options, both ending up on the same results page:
 
-Try: paste `sample_risks.json` or upload it.
+- **Upload JSON** — drag and drop a file, pick one with the file browser, or paste straight into the text box. There's a collapsible example if you want the shape.
+- **Add Risks Manually** — fill in title, category, description, drag the probability/impact sliders, hit Add Risk. Each one shows up as a little card you can remove before submitting.
 
-## Scoring (`risk_engine.py`, pure Python)
+`POST /analyze` checks everything (probability and impact have to be whole numbers 1–5, all fields present), then runs the scoring engine, builds the heat map, and calls Gemini. `GET /export` downloads the last analysis as CSV.
 
-Score = probability × impact. Critical 20–25, High 13–19, Medium 7–12, Low 1–6.
-Overall: any Critical → Critical; else High > 2 → High; else Medium > total/2 → Medium; else Low.
+Easiest first run: upload or paste `sample_risks.json`.
 
-Sample actuals: R1/R3 Critical (20), R2 High (15), R4/R7/R5/R6/R8 Medium, R9/R10 Low → overall Critical, AI gets 3 risks.
+## How scoring works
 
-## Modules
+All of this lives in `risk_engine.py`, plain Python with no Flask or AI mixed in. Score is just probability × impact, then:
 
-- `risk_engine.py` — scoring/ranking, no Flask/AI
-- `heatmap.py` — Plotly 5×5 div only, same-cell jitter, hover details
-- `ai_planner.py` — only Gemini caller; High/Critical only; strict-JSON prompt; `try/except` fallback renders "AI response plan unavailable" without crashing
-- `exporter.py` — pandas CSV: Risk ID, Title, Category, Probability, Impact, Score, Severity, Strategy, Actions (; -joined), Owner, Contingency
-- `app.py` — thin routes + validation
+- 20–25 → Critical, 13–19 → High, 7–12 → Medium, 1–6 → Low
+
+Overall project level: if anything is Critical, the project is Critical. Otherwise more than two Highs means High; more than half Medium means Medium; everything else is Low.
+
+Worth knowing about the sample file: the brief describes R4 and R5 as High, but the math says otherwise (3×4=12 and 2×5=10 are both Medium by the rules above). I kept the JSON exactly as specified, so the real split is R1/R3 Critical, R2 High, R4/R7/R5/R6/R8 Medium, R9/R10 Low — overall Critical, which means Gemini gets 3 risks to work with.
+
+## What's where
+
+- `risk_engine.py` — scoring, severity, ranking. Importable on its own, no Flask, no AI.
+- `heatmap.py` — Plotly 5×5 grid returned as an inline HTML div. Risks sharing a cell get nudged apart so you can actually see them; hovering shows the details.
+- `ai_planner.py` — the only file that touches the AI API. Sends High and Critical risks only (no point paying tokens on Lows), demands strict JSON back, and if the call fails or the JSON is garbage it just returns an "unavailable" flag so the page still renders.
+- `exporter.py` — pandas CSV with Risk ID, Title, Category, Probability, Impact, Score, Severity, Strategy, Actions (semicolon-joined), Owner, Contingency.
+- `app.py` — route handlers only, kept thin on purpose. Bad input re-renders the upload page with an inline message instead of a traceback.
 
 ## Tests
 
@@ -50,4 +58,6 @@ Sample actuals: R1/R3 Critical (20), R2 High (15), R4/R7/R5/R6/R8 Medium, R9/R10
 python -m pytest tests/test_risk_engine.py -v
 ```
 
-Covers score math, severity boundaries (6→Low, 7→Medium, 12→Medium, 13→High, 20→Critical), overall-level branches, ranking, matrix grouping, float/out-of-range rejection.
+Covers the score math, the boundary values that matter (6 stays Low, 7 tips into Medium, 12 stays Medium, 13 tips into High, 20 into Critical), each overall-level branch, ranking order, the matrix grouping, and rejection of floats and out-of-range values.
+
+Heads-up on the AI setup: the old `google-generativeai` package is deprecated and `gemini-2.0/2.5-flash` are retired for new keys, so this uses the `google-genai` SDK with `gemini-3.5-flash`, which I verified end to end.
