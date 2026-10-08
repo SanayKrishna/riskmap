@@ -1,9 +1,118 @@
-<!doctype html><title>Risk Register</title>
-{% if error %}<p style="color:red">{{ error }}</p>{% endif %}
-<form method="post" action="/analyze" enctype="multipart/form-data">
-<input name="project_name" placeholder="Project name">
-<textarea name="pasted_json" placeholder='{"project_name":..,"risks":[...]}'></textarea>
-<input type="file" name="json_file">
-<input type="hidden" name="manual_json" value="">
-<button>Analyze</button>
-</form>
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Risk Register &amp; Response Planner</h1>
+  <p class="sub">Upload a risks JSON file or add risks manually. Both paths produce the same scored register, heat map and AI response plan.</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  <form id="riskForm" method="post" action="/analyze" enctype="multipart/form-data">
+    <div class="grid2">
+      <div><label>Project name</label><input type="text" name="project_name" placeholder="E-Commerce Platform Relaunch"></div>
+      <div class="grid2">
+        <div><label>Project manager</label><input type="text" name="project_manager" placeholder="Sanay"></div>
+        <div><label>Date</label><input type="date" name="date" value="2026-09-15"></div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="upload">Upload JSON</button>
+      <button type="button" class="tab" data-tab="manual">Add Risks Manually</button>
+    </div>
+
+    <div class="tabpane active" id="pane-upload">
+      <div class="drop" id="drop">Drag &amp; drop JSON here or <u>browse</u><br><small id="fileName"></small></div>
+      <input type="file" id="fileInput" name="json_file" accept=".json,application/json" hidden>
+      <label>Or paste JSON directly</label>
+      <textarea name="pasted_json" id="pasted" placeholder='{"project_name": "...", "risks": [...]}'></textarea>
+      <details><summary>See example JSON</summary><pre style="background:#F7F7F5;padding:12px;border-radius:8px;overflow:auto;font-size:12px">{
+  "project_name": "Mobile Banking App",
+  "project_manager": "Sanay",
+  "date": "2026-09-15",
+  "risks": [
+    {"id": "R1", "title": "Key developer leaves mid-project",
+     "category": "Resource", "probability": 3, "impact": 5,
+     "description": "Lead backend developer may resign."}
+  ]
+}</pre></details>
+    </div>
+
+    <div class="tabpane" id="pane-manual">
+      <div class="grid2">
+        <div><label>Risk title</label><input type="text" id="mTitle" placeholder="Payment API deprecation"></div>
+        <div><label>Category</label>
+          <select id="mCat">
+            <option>Technical</option><option>Resource</option><option>Schedule</option>
+            <option>Cost</option><option>External</option><option>Quality</option>
+          </select>
+        </div>
+      </div>
+      <label>Description</label>
+      <textarea id="mDesc" style="min-height:70px" placeholder="What could happen and why it matters"></textarea>
+      <div class="grid2">
+        <div><label>Probability: <span class="scale-val" id="pVal">3</span></label>
+          <input type="range" id="mProb" min="1" max="5" value="3">
+          <div class="scale-labels"><span>Rare</span><span>Almost Certain</span></div></div>
+        <div><label>Impact: <span class="scale-val" id="iVal">3</span></label>
+          <input type="range" id="mImp" min="1" max="5" value="3">
+          <div class="scale-labels"><span>Negligible</span><span>Catastrophic</span></div></div>
+      </div>
+      <div class="btn-row"><button type="button" class="btn" id="addBtn">Add Risk</button></div>
+      <div id="manualList"></div>
+      <input type="hidden" name="manual_json" id="manualJson">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="submitBtn" type="submit"><span class="spinner"></span><span id="submitTxt">Analyze Risks</span></button>
+    </div>
+  </form>
+</div>
+
+<script>
+const tabs=[...document.querySelectorAll('.tab')];
+tabs.forEach(t=>t.onclick=()=>{
+  tabs.forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('pane-'+t.dataset.tab).classList.add('active');
+});
+const drop=document.getElementById('drop'),fi=document.getElementById('fileInput'),fn=document.getElementById('fileName');
+drop.onclick=()=>fi.click();
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>{fi.files=ev.dataTransfer.files;fn.textContent=fi.files[0]?fi.files[0].name:''});
+fi.onchange=()=>{fn.textContent=fi.files[0]?fi.files[0].name:''};
+const mp=document.getElementById('mProb'),mi=document.getElementById('mImp');
+mp.oninput=()=>document.getElementById('pVal').textContent=mp.value;
+mi.oninput=()=>document.getElementById('iVal').textContent=mi.value;
+let risks=[],ctr=1;
+document.getElementById('addBtn').onclick=()=>{
+  const title=document.getElementById('mTitle').value.trim();
+  const desc=document.getElementById('mDesc').value.trim();
+  if(!title){alert('Enter a risk title');return}
+  risks.push({id:'R'+(ctr++),title,category:document.getElementById('mCat').value,
+    probability:+mp.value,impact:+mi.value,description:desc||title});
+  document.getElementById('mTitle').value='';document.getElementById('mDesc').value='';
+  render();
+};
+function render(){
+  const box=document.getElementById('manualList');box.innerHTML='';
+  risks.forEach((r,idx)=>{
+    const d=document.createElement('div');d.className='rcard';
+    d.innerHTML=`<div><b>${r.id}</b> — ${r.title}<br><small>${r.category} · P${r.probability} I${r.impact}</small></div>`;
+    const b=document.createElement('button');b.type='button';b.className='rdel';b.textContent='Remove';
+    b.onclick=()=>{risks.splice(idx,1);render()};
+    d.appendChild(b);box.appendChild(d);
+  });
+}
+document.getElementById('riskForm').onsubmit=e=>{
+  const hasUpload=fi.files.length>0||document.getElementById('pasted').value.trim()!=='';
+  if(!hasUpload){
+    if(!risks.length){alert('Add at least one risk or upload JSON');e.preventDefault();return}
+    document.getElementById('manualJson').value=JSON.stringify(risks);
+  }
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=true;btn.classList.add('loading');
+  document.getElementById('submitTxt').textContent='Analyzing risks…';
+};
+</script>
+{% endblock %}
