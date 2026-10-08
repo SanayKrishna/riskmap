@@ -1,6 +1,74 @@
-<!doctype html><title>Results</title>
-<h1>{{ analysis.project_name }} — {{ analysis.overall_level }}</h1>
-<div>{{ heatmap_div|safe }}</div>
-<ul>{% for r in analysis.risks %}<li>{{ r.id }} {{ r.score }} {{ r.severity }}</li>{% endfor %}</ul>
-<p>AI available: {{ ai.available }}</p>
-<a href="/export">Export</a>
+{% extends "base.html" %}
+{% block title %}{{ analysis.project_name }} — Results{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="strip">
+    <div>
+      <h1 style="margin:0">{{ analysis.project_name }}</h1>
+      <p class="sub" style="margin:4px 0 0">{{ analysis.date }}{% if analysis.project_manager %} · PM: {{ analysis.project_manager }}{% endif %}</p>
+    </div>
+    <span class="badge b-{{ analysis.overall_level }}">{{ analysis.overall_level }} Risk</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><b>{{ analysis.total_count }}</b><span>Total Risks</span></div>
+  <div class="stat"><b>{{ analysis.critical_count }}</b><span>Critical</span></div>
+  <div class="stat"><b>{{ analysis.high_count }}</b><span>High</span></div>
+  <div class="stat"><b>{{ analysis.medium_count + analysis.low_count }}</b><span>Medium + Low</span></div>
+</div>
+
+<div class="card">
+  <h2>Risk Heat Map</h2>
+  <div class="plotly-div">{{ heatmap_div|safe }}</div>
+</div>
+
+<div class="card">
+  <h2>Risk Register Table</h2>
+  <div style="overflow:auto">
+  <table>
+    <tr><th>Rank</th><th>ID</th><th>Title</th><th>Category</th><th>P</th><th>I</th><th>Score</th><th>Severity</th><th>Description</th></tr>
+    {% for r in analysis.risks %}
+    <tr class="sev-{{ r.severity }}">
+      <td>{{ r.priority_rank }}</td><td><b>{{ r.id }}</b></td><td>{{ r.title }}</td>
+      <td>{{ r.category }}</td><td>{{ r.probability }}</td><td>{{ r.impact }}</td>
+      <td><b>{{ r.score }}</b></td>
+      <td><span class="pill b-{{ r.severity }}">{{ r.severity }}</span></td>
+      <td class="muted">{{ r.description }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>AI Response Plan <small class="muted">(High &amp; Critical only)</small></h2>
+  {% if not ai.available %}
+    <div class="ai-card"><b>AI response plan unavailable</b>
+      <p class="muted">The Gemini call failed or no key is configured. The scored register above is unaffected. Details logged to <code>ai_log.txt</code>.</p>
+    </div>
+  {% endif %}
+  {% for r in analysis.risks if r.severity in ('High','Critical') %}
+    {% set plan = ai.plans.get(r.id) if ai.plans else None %}
+    <div class="ai-card">
+      <div class="ai-head">
+        <div><b>{{ r.id }}</b> — {{ r.title }} <span class="pill b-{{ r.severity }}">{{ r.severity }} · {{ r.score }}</span></div>
+        {% if plan %}<span class="pill b-{{ plan.strategy }}">{{ plan.strategy }}</span>{% endif %}
+      </div>
+      {% if plan %}
+        <p><i>{{ plan.strategy_justification }}</i></p>
+        <ol class="actions">{% for a in plan.actions %}<li>{{ a }}</li>{% endfor %}</ol>
+        <p>Owner: <span class="owner">{{ plan.owner }}</span></p>
+        <div class="contingency"><b>Contingency:</b> {{ plan.contingency }}</div>
+      {% else %}
+        <p class="muted">No AI plan for {{ r.id }} (AI unavailable or skipped).</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+<div class="center">
+  <a class="btn btn-primary" href="/export">Download Risk Register (CSV)</a><br><br>
+  <a href="/">Analyze Another Project</a>
+</div>
+{% endblock %}
