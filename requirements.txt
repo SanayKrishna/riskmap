@@ -1,0 +1,6 @@
+flask
+plotly
+pandas
+python-dotenv
+google-generativeai
+pytest

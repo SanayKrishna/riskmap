@@ -1,0 +1,14 @@
+# secrets — never commit
+.env
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# generated exports / logs
+*.csv
+ai_log.txt
