@@ -1,0 +1,6 @@
+<!doctype html><title>Results</title>
+<h1>{{ analysis.project_name }} — {{ analysis.overall_level }}</h1>
+<div>{{ heatmap_div|safe }}</div>
+<ul>{% for r in analysis.risks %}<li>{{ r.id }} {{ r.score }} {{ r.severity }}</li>{% endfor %}</ul>
+<p>AI available: {{ ai.available }}</p>
+<a href="/export">Export</a>

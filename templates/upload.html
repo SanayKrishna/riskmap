@@ -1,0 +1,9 @@
+<!doctype html><title>Risk Register</title>
+{% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+<form method="post" action="/analyze" enctype="multipart/form-data">
+<input name="project_name" placeholder="Project name">
+<textarea name="pasted_json" placeholder='{"project_name":..,"risks":[...]}'></textarea>
+<input type="file" name="json_file">
+<input type="hidden" name="manual_json" value="">
+<button>Analyze</button>
+</form>
