@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ project }} — Risk History{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="report-head">
+    <div>
+      <div class="eyebrow">Risk velocity</div>
+      <h1>{{ project }}</h1>
+      <p class="meta">{{ data.snapshots|length }} snapshot{{ "s" if data.snapshots|length != 1 }} logged</p>
+    </div>
+    <a class="btn" href="/">＋ New analysis</a>
+  </div>
+  {% if error %}<div class="error" style="margin-top:14px"><span>{{ error }}</span></div>{% endif %}
+</div>
+
+{% if data.snapshots %}
+<div class="card">
+  <h2>Snapshots</h2>
+  <div class="table-scroll" style="max-height:240px">
+  <table>
+    <tr><th>Label</th><th>Date</th><th>Risks</th></tr>
+    {% for s in data.snapshots %}
+    <tr><td><b>{{ s.label }}</b></td><td>{{ s.date }}</td><td>{{ s.risks|length }}</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Score Trends</h2>
+  <div class="plotly-div">{{ trend_div|safe }}</div>
+</div>
+
+<div class="card">
+  <h2>What Changed</h2>
+  {% set sc={'Worsened':'b-Critical','Improved':'b-Low','Stable':'b-Accept','New':'b-Transfer','Closed':'b-Accept'} %}
+  <div class="table-scroll" style="max-height:360px">
+  <table>
+    <tr><th>ID</th><th>Title</th><th>First → Last</th><th>Δ</th><th>Status</th></tr>
+    {% for t in data.trends %}
+    <tr>
+      <td><b>{{ t.id }}</b></td><td>{{ t.title }}</td>
+      <td>{{ t.first_score }} → {{ t.last_score }}</td>
+      <td><b>{{ "%+d"|format(t.delta) }}</b></td>
+      <td><span class="pill {{ sc[t.status] }}">{{ t.status }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+{% else %}
+<div class="card"><p class="muted">No snapshots yet — save one below to start tracking this register over time.</p></div>
+{% endif %}
+
+<div class="card">
+  <h2>Log a Time Point</h2>
+  <form method="post" action="/snapshot" enctype="multipart/form-data">
+    <input type="hidden" name="project" value="{{ project }}">
+    <div class="grid2">
+      <div><label>Label</label><input type="text" name="label" placeholder="Week 2" required></div>
+      <div><label>Date</label><input type="date" name="date"></div>
+    </div>
+    <label> risks JSON for this time point <span class="muted">(same ids as before)</span></label>
+    <input type="file" name="json_file" accept=".json,application/json">
+    <textarea name="pasted_json" style="margin-top:10px" placeholder='{"risks": [...]}'></textarea>
+    <div class="btn-row"><button class="btn btn-primary" type="submit">Save snapshot</button></div>
+  </form>
+  <p class="fine">Tip: after any analysis you can also save it straight from the results page.</p>
+</div>
+{% endblock %}

@@ -13,12 +13,13 @@ from risk_engine import analyze_risks
 from heatmap import generate_heatmap
 from ai_planner import generate_response_plans
 from exporter import to_csv_bytes
+from velocity import compute_trends, list_snapshots, save_snapshot, trend_chart
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-only-change-me")
 
-# last successful analysis for /export (single-user standalone tool)
-LAST = {"analysis": None, "ai": None}
+# last successful analysis for /export and /snapshot (single-user standalone tool)
+LAST = {"analysis": None, "ai": None, "raw_risks": None, "currency": "$"}
 
 
 def _parse_incoming(form, files):
@@ -84,6 +85,8 @@ def analyze():
         ai = generate_response_plans(project_name, high_crit)
         LAST["analysis"] = analysis
         LAST["ai"] = ai
+        LAST["raw_risks"] = risks
+        LAST["currency"] = currency
         return render_template(
             "results.html",
             analysis=analysis,
@@ -115,6 +118,64 @@ def export():
 @app.errorhandler(500)
 def _500(_e):
     return render_template("upload.html", error="Internal error. Please try again."), 500
+
+
+def _history_view(project, error=None):
+    data = compute_trends(project)
+    div = trend_chart(project) if data["snapshots"] else ""
+    return render_template("history.html", project=project, data=data,
+                           trend_div=div, error=error)
+
+
+@app.get("/history")
+def history():
+    project = (request.args.get("project") or "").strip()
+    if not project and LAST.get("analysis"):
+        project = LAST["analysis"]["project_name"]
+    if not project:
+        return redirect(url_for("index"))
+    return _history_view(project)
+
+
+@app.post("/snapshot")
+def snapshot():
+    try:
+        project = (request.form.get("project") or "").strip()
+        label = (request.form.get("label") or "").strip()
+        snap_date = (request.form.get("date") or "").strip()
+        pasted = (request.form.get("pasted_json") or "").strip()
+        uploaded = request.files.get("json_file")
+        if uploaded and getattr(uploaded, "filename", ""):
+            try:
+                payload = json.load(uploaded.stream)
+            except Exception as exc:
+                raise ValueError(f"uploaded file is not valid JSON: {exc}")
+            risks = payload.get("risks") if isinstance(payload, dict) else payload
+            currency = (payload.get("currency") if isinstance(payload, dict) else None) or "$"
+            project = project or (payload.get("project_name") if isinstance(payload, dict) else "")
+        elif pasted:
+            try:
+                payload = json.loads(pasted)
+            except Exception as exc:
+                raise ValueError(f"pasted JSON is invalid: {exc}")
+            risks = payload.get("risks") if isinstance(payload, dict) else payload
+            currency = (payload.get("currency") if isinstance(payload, dict) else None) or "$"
+            project = project or (payload.get("project_name") if isinstance(payload, dict) else "")
+        else:
+            # snapshot the last analysis straight from the results page
+            if not LAST.get("analysis"):
+                raise ValueError("analyze a project first, then save it as a snapshot.")
+            project = project or LAST["analysis"]["project_name"]
+            risks = LAST["raw_risks"]
+            currency = LAST.get("currency", "$")
+            snap_date = snap_date or LAST["analysis"].get("date", "")
+        if not project:
+            raise ValueError("project name is missing.")
+        save_snapshot(project, label, snap_date, risks, currency=currency)
+        return redirect(url_for("history", project=project))
+    except ValueError as exc:
+        project = (request.form.get("project") or "").strip() or "project"
+        return _history_view(project, error=str(exc)), 400
 
 
 if __name__ == "__main__":

@@ -80,6 +80,11 @@
 
 <div class="center">
   <a class="btn btn-primary" href="/export">Download Risk Register (CSV)</a><br><br>
-  <a href="/">Analyze Another Project</a>
+  <form method="post" action="/snapshot" class="snapform">
+    <input type="hidden" name="project" value="{{ analysis.project_name }}">
+    <input type="text" name="label" placeholder="Week 1" required>
+    <button class="btn" type="submit">Save snapshot</button>
+  </form>
+  <p><a href="/history?project={{ analysis.project_name|urlencode }}">View history →</a> · <a href="/">Analyze Another Project</a></p>
 </div>
 {% endblock %}

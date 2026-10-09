@@ -12,3 +12,4 @@ venv/
 # generated exports / logs
 *.csv
 ai_log.txt
+data/
