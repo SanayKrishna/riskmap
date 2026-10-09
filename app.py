@@ -13,6 +13,7 @@ from risk_engine import analyze_risks
 from heatmap import generate_heatmap
 from ai_planner import generate_response_plans
 from exporter import to_csv_bytes
+from graph import cascade_ranking, chains_text, network_chart, validate_links
 from velocity import compute_trends, list_snapshots, save_snapshot, trend_chart
 
 app = Flask(__name__)
@@ -79,12 +80,17 @@ def index():
 def analyze():
     try:
         project_name, manager, date, currency, risks = _parse_incoming(request.form, request.files)
+        validate_links(risks)
         analysis = analyze_risks(project_name, manager, date, risks, currency=currency)
         heatmap_div = generate_heatmap(analysis)
+        cascade = cascade_ranking(analysis["risks"])
+        network_div = network_chart(analysis)
         high_crit = [r for r in analysis["risks"] if r["severity"] in ("High", "Critical")]
-        ai = generate_response_plans(project_name, high_crit)
+        ai = generate_response_plans(project_name, high_crit, chains=chains_text(analysis["risks"]))
         LAST["analysis"] = analysis
         LAST["ai"] = ai
+        LAST["cascade"] = cascade
+        LAST["network_div"] = network_div
         LAST["raw_risks"] = risks
         LAST["currency"] = currency
         return render_template(
@@ -92,6 +98,8 @@ def analyze():
             analysis=analysis,
             heatmap_div=heatmap_div,
             ai=ai,
+            cascade=cascade,
+            network_div=network_div,
         )
     except ValueError as exc:
         return render_template("upload.html", error=str(exc)), 400

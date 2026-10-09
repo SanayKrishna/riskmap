@@ -4,13 +4,13 @@
   "date": "2026-09-15",
   "currency": "$",
   "risks": [
-    { "id": "R1", "title": "Key developer resignation", "category": "Resource", "probability": 4, "impact": 5, "cost_impact": 80000, "description": "The lead backend engineer has received a competing offer and may leave before delivery." },
+    { "id": "R1", "title": "Key developer resignation", "category": "Resource", "probability": 4, "impact": 5, "cost_impact": 80000, "triggers": ["R4"], "description": "The lead backend engineer has received a competing offer and may leave before delivery." },
     { "id": "R2", "title": "Payment gateway API deprecation", "category": "Technical", "probability": 3, "impact": 5, "cost_impact": 50000, "description": "The third-party payment API has announced an upcoming version sunset." },
-    { "id": "R3", "title": "Scope creep from stakeholders", "category": "Schedule", "probability": 5, "impact": 4, "cost_impact": 30000, "description": "Product owners have a history of adding features mid-sprint without timeline adjustment." },
+    { "id": "R3", "title": "Scope creep from stakeholders", "category": "Schedule", "probability": 5, "impact": 4, "cost_impact": 30000, "triggers": ["R7"], "description": "Product owners have a history of adding features mid-sprint without timeline adjustment." },
     { "id": "R4", "title": "Cloud infrastructure cost overrun", "category": "Cost", "probability": 3, "impact": 4, "cost_impact": 45000, "description": "Estimated AWS costs may be exceeded if traffic spikes during load testing." },
     { "id": "R5", "title": "Regulatory compliance delay", "category": "External", "probability": 2, "impact": 5, "cost_impact": 20000, "description": "New data privacy regulations may require additional audit before go-live." },
     { "id": "R6", "title": "Third-party logistics integration", "category": "Technical", "probability": 3, "impact": 3, "description": "Logistics provider API has limited documentation and poor support response times." },
-    { "id": "R7", "title": "UI design sign-off delay", "category": "Schedule", "probability": 4, "impact": 3, "cost_impact": 12000, "description": "Design approvals historically take longer than planned due to stakeholder availability." },
+    { "id": "R7", "title": "UI design sign-off delay", "category": "Schedule", "probability": 4, "impact": 3, "cost_impact": 12000, "triggers": ["R8"], "description": "Design approvals historically take longer than planned due to stakeholder availability." },
     { "id": "R8", "title": "Test environment instability", "category": "Quality", "probability": 3, "impact": 3, "description": "The staging environment has had intermittent outages affecting QA cycles." },
     { "id": "R9", "title": "Vendor delivery delay", "category": "External", "probability": 2, "impact": 3, "description": "Hardware procurement for on-premise components may be delayed by supply chain issues." },
     { "id": "R10", "title": "Team communication breakdown", "category": "Resource", "probability": 2, "impact": 2, "description": "Distributed team across time zones may cause coordination delays on cross-functional tasks." }

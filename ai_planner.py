@@ -17,7 +17,7 @@ def _api_key():
     return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
 
 
-def build_prompt(project_name, risks):
+def build_prompt(project_name, risks, chains=None):
     lines = [
         f'You are a senior project risk manager. Project: "{project_name}".',
         "For EACH risk below, propose a response plan.",
@@ -32,9 +32,15 @@ def build_prompt(project_name, risks):
         "  Never generic advice like 'monitor the risk'.",
         "- owner: a role like Tech Lead, Project Manager, Procurement.",
         "- contingency: one sentence on what to do if the risk occurs anyway.",
-        "",
-        "RISKS:",
     ]
+    if chains:
+        lines += [
+            "",
+            "These risks are LINKED — one can trigger the next. Plan for the",
+            "chain, not just the single node (e.g. stop the upstream trigger,",
+            "or break the link between them):",
+        ] + [f"- chain: {c}" for c in chains]
+    lines += ["", "RISKS:"]
     for r in risks:
         lines.append(
             f"- {r.get('id')}: \"{r.get('title')}\" "
@@ -80,14 +86,14 @@ def _normalize(data):
     return plans
 
 
-def generate_response_plans(project_name, high_critical_risks, model_name="gemini-3.5-flash"):
+def generate_response_plans(project_name, high_critical_risks, model_name="gemini-3.5-flash", chains=None):
     """Call Gemini for High/Critical risks only. Never raises — returns fallback dict."""
     # safety filter: never send Low/Medium even if caller slips
     risks = [r for r in (high_critical_risks or []) if r.get("severity") in ("High", "Critical")]
     if not risks:
         return {"available": True, "plans": {}, "model": model_name}
 
-    prompt = build_prompt(project_name, risks)
+    prompt = build_prompt(project_name, risks, chains=chains)
     key = _api_key()
     if not key:
         _log(prompt, "ERROR: missing GEMINI_API_KEY")

@@ -3,4 +3,5 @@ plotly
 pandas
 python-dotenv
 google-genai
+networkx
 pytest
