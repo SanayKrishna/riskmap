@@ -83,3 +83,40 @@ def test_rejects_floats_and_out_of_range():
         analyze_risks("P", "M", "d", [_make(0, 3, "R1")])
     with pytest.raises(ValueError):
         analyze_risks("P", "M", "d", [_make(3, 6, "R1")])
+
+
+def _cost_risk(rid, prob, cost):
+    return {"id": rid, "title": "t", "category": "Cost",
+            "probability": prob, "impact": 5, "description": "d",
+            "cost_impact": cost}
+
+
+def test_emv_math_and_prob_mapping():
+    from risk_engine import prob_to_decimal
+    assert prob_to_decimal(1) == 0.2
+    assert prob_to_decimal(3) == 0.6
+    assert prob_to_decimal(5) == 1.0
+    out = analyze_risks("P", "M", "d", [_cost_risk("R1", 3, 50000)])
+    assert out["risks"][0]["emv"] == 30000.0
+    assert out["total_exposure"] == 30000.0
+    assert out["exposure_count"] == 1
+
+
+def test_emv_optional_and_total():
+    risks = [_cost_risk("R1", 4, 80000),
+             {"id": "R2", "title": "t", "category": "Cost",
+              "probability": 2, "impact": 2, "description": "d"}]
+    out = analyze_risks("P", "M", "d", risks, currency="USD")
+    assert out["currency"] == "USD"
+    by_id = {r["id"]: r for r in out["risks"]}
+    assert by_id["R2"]["emv"] is None
+    assert out["total_exposure"] == round(0.8 * 80000, 2)
+    assert out["exposure_count"] == 1
+
+
+def test_emv_rejects_bad_cost():
+    import pytest
+    with pytest.raises(ValueError):
+        analyze_risks("P", "M", "d", [_cost_risk("R1", 3, -5)])
+    with pytest.raises(ValueError):
+        analyze_risks("P", "M", "d", [_cost_risk("R1", 3, "lots")])

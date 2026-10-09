@@ -19,6 +19,13 @@
   <div class="stat"><b>{{ analysis.medium_count + analysis.low_count }}</b><span>Medium + Low</span></div>
 </div>
 
+{% if analysis.exposure_count %}
+<div class="card exposure">
+  <div class="exposure-total">{{ analysis.currency }}{{ "{:,.2f}".format(analysis.total_exposure) }}</div>
+  <p class="muted" style="margin:4px 0 0">Expected monetary value across {{ analysis.exposure_count }} costed risk{{ "s" if analysis.exposure_count != 1 }} · P÷5 × cost impact</p>
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Risk Heat Map</h2>
   <div class="plotly-div">{{ heatmap_div|safe }}</div>
@@ -28,13 +35,14 @@
   <h2>Risk Register Table</h2>
   <div class="table-scroll">
   <table>
-    <tr><th>Rank</th><th>ID</th><th>Title</th><th>Category</th><th>P</th><th>I</th><th>Score</th><th>Severity</th><th>Description</th></tr>
+    <tr><th>Rank</th><th>ID</th><th>Title</th><th>Category</th><th>P</th><th>I</th><th>Score</th><th>Severity</th>{% if analysis.exposure_count %}<th>EMV</th>{% endif %}<th>Description</th></tr>
     {% for r in analysis.risks %}
     <tr class="sev-{{ r.severity }}">
-      <td>{{ r.priority_rank }}</td><td><b>{{ r.id }}</b></td><td>{{ r.title }}</td>
+      <td>{{ r.priority_rank }}</td><td><b>{{ r.id }}</b></td><td>{{ r.title }}{% if r.triggers %}<br><small class="muted">→ {{ r.triggers|join(', ') }}</small>{% endif %}</td>
       <td>{{ r.category }}</td><td>{{ r.probability }}</td><td>{{ r.impact }}</td>
       <td><b>{{ r.score }}</b></td>
       <td><span class="pill b-{{ r.severity }}">{{ r.severity }}</span></td>
+      {% if analysis.exposure_count %}<td>{% if r.emv is not none %}{{ analysis.currency }}{{ "{:,.0f}".format(r.emv) }}{% endif %}</td>{% endif %}
       <td class="muted">{{ r.description }}</td>
     </tr>
     {% endfor %}

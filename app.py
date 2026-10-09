@@ -22,7 +22,7 @@ LAST = {"analysis": None, "ai": None}
 
 
 def _parse_incoming(form, files):
-    """Return (project_name, manager, date, risks_list). Raises ValueError."""
+    """Return (project_name, manager, date, currency, risks_list). Raises ValueError."""
     pasted = (form.get("pasted_json") or "").strip()
     manual = (form.get("manual_json") or "").strip()
     uploaded = files.get("json_file")
@@ -52,11 +52,13 @@ def _parse_incoming(form, files):
         project_name = form.get("project_name", "").strip() or "Untitled Project"
         manager = form.get("project_manager", "").strip()
         date = form.get("date", "").strip()
+        currency = form.get("currency", "").strip() or "$"
     elif isinstance(payload, dict):
         risks = payload.get("risks")
         project_name = payload.get("project_name") or form.get("project_name", "").strip() or "Untitled Project"
         manager = payload.get("project_manager", "") or form.get("project_manager", "").strip() or ""
         date = payload.get("date", "") or form.get("date", "").strip() or ""
+        currency = payload.get("currency") or form.get("currency", "").strip() or "$"
         if risks is None:
             raise ValueError("JSON must contain a 'risks' list.")
     else:
@@ -64,7 +66,7 @@ def _parse_incoming(form, files):
 
     if not isinstance(risks, list) or not risks:
         raise ValueError("at least one risk is required.")
-    return project_name, manager, date, risks
+    return project_name, manager, date, currency, risks
 
 
 @app.get("/")
@@ -75,8 +77,8 @@ def index():
 @app.post("/analyze")
 def analyze():
     try:
-        project_name, manager, date, risks = _parse_incoming(request.form, request.files)
-        analysis = analyze_risks(project_name, manager, date, risks)
+        project_name, manager, date, currency, risks = _parse_incoming(request.form, request.files)
+        analysis = analyze_risks(project_name, manager, date, risks, currency=currency)
         heatmap_div = generate_heatmap(analysis)
         high_crit = [r for r in analysis["risks"] if r["severity"] in ("High", "Critical")]
         ai = generate_response_plans(project_name, high_crit)

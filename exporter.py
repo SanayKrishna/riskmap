@@ -6,7 +6,8 @@ import pandas as pd
 
 COLUMNS = [
     "Risk ID", "Title", "Category", "Probability", "Impact",
-    "Score", "Severity", "Strategy", "Actions", "Owner", "Contingency",
+    "Score", "Severity", "Cost Impact", "EMV", "Linked Risks",
+    "Strategy", "Actions", "Owner", "Contingency",
 ]
 
 
@@ -17,6 +18,7 @@ def build_dataframe(analysis, ai_plans=None):
     for r in analysis.get("risks", []):
         plan = ai_plans.get(r["id"], {})
         actions = plan.get("actions", [])
+        links = r.get("triggers", []) or []
         rows.append(
             {
                 "Risk ID": r["id"],
@@ -26,6 +28,9 @@ def build_dataframe(analysis, ai_plans=None):
                 "Impact": r["impact"],
                 "Score": r["score"],
                 "Severity": r["severity"],
+                "Cost Impact": r.get("cost_impact") if r.get("cost_impact") is not None else "",
+                "EMV": r.get("emv") if r.get("emv") is not None else "",
+                "Linked Risks": "; ".join(links),
                 "Strategy": plan.get("strategy", ""),
                 "Actions": "; ".join(actions) if isinstance(actions, list) else str(actions),
                 "Owner": plan.get("owner", ""),

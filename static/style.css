@@ -69,6 +69,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center}
 .stat b{font-size:26px;display:block}
 .stat span{color:var(--muted);font-size:13px}
+.exposure{border-left:4px solid var(--accent)}
+.exposure-total{font-family:"Newsreader",Georgia,serif;font-size:34px;font-weight:700;letter-spacing:-0.01em}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:1}
 td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}

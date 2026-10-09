@@ -10,6 +10,10 @@ SEVERITY_RULES = [
 
 REQUIRED_RISK_FIELDS = ("id", "title", "category", "probability", "impact", "description")
 
+# P=1..5 maps to 0.2..1.0 for EMV math (P/5)
+def prob_to_decimal(probability):
+    return round(probability / 5.0, 2)
+
 
 def score_to_severity(score):
     """Map a 1-25 score to (severity_label, hex_color)."""
@@ -45,10 +49,31 @@ def validate_risk(risk):
     risk_id = risk.get("id", "?")
     _validate_int_in_range("probability", risk["probability"], risk_id)
     _validate_int_in_range("impact", risk["impact"], risk_id)
+    # optional EMV field: non-negative number or absent
+    cost = risk.get("cost_impact", None)
+    if cost in (None, ""):
+        risk["cost_impact"] = None
+    else:
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)):
+            raise ValueError(
+                f"risk {risk_id!r}: cost_impact must be a number >= 0, got {cost!r}"
+            )
+        if cost < 0:
+            raise ValueError(
+                f"risk {risk_id!r}: cost_impact must be >= 0, got {cost!r}"
+            )
+        risk["cost_impact"] = float(cost)
+    # optional links: list of risk ids (cross-checked in graph.py)
+    triggers = risk.get("triggers", [])
+    if triggers in (None, ""):
+        triggers = []
+    if not isinstance(triggers, list) or any(not isinstance(t, str) for t in triggers):
+        raise ValueError(f"risk {risk_id!r}: triggers must be a list of risk ids")
+    risk["triggers"] = triggers
     return True
 
 
-def analyze_risks(project_name, project_manager, date, risks):
+def analyze_risks(project_name, project_manager, date, risks, currency="$"):
     """Score, categorize and rank every risk.
 
     Returns a plain dict with per-risk and aggregate outputs.
@@ -70,6 +95,8 @@ def analyze_risks(project_name, project_manager, date, risks):
         i = risk["impact"]
         score = p * i
         severity, color = score_to_severity(score)
+        cost = risk.get("cost_impact")
+        emv = round(prob_to_decimal(p) * cost, 2) if cost is not None else None
         scored.append(
             {
                 "id": rid,
@@ -81,6 +108,9 @@ def analyze_risks(project_name, project_manager, date, risks):
                 "score": score,
                 "severity": severity,
                 "color": color,
+                "cost_impact": cost,
+                "emv": emv,
+                "triggers": risk.get("triggers", []),
             }
         )
 
@@ -94,6 +124,8 @@ def analyze_risks(project_name, project_manager, date, risks):
     medium = sum(1 for r in scored if r["severity"] == "Medium")
     low = sum(1 for r in scored if r["severity"] == "Low")
     total = len(scored)
+    total_exposure = round(sum(r["emv"] for r in scored if r["emv"] is not None), 2)
+    exposure_count = sum(1 for r in scored if r["emv"] is not None)
 
     if critical > 0:
         overall = "Critical"
@@ -113,6 +145,7 @@ def analyze_risks(project_name, project_manager, date, risks):
         "project_name": project_name,
         "project_manager": project_manager,
         "date": date,
+        "currency": currency or "$",
         "risks": scored,
         "total_count": total,
         "critical_count": critical,
@@ -121,4 +154,6 @@ def analyze_risks(project_name, project_manager, date, risks):
         "low_count": low,
         "overall_level": overall,
         "matrix_grid": matrix_grid,
+        "total_exposure": total_exposure,
+        "exposure_count": exposure_count,
     }
