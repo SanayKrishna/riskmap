@@ -1,118 +1,213 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card">
-  <h1>Risk Register &amp; Response Planner</h1>
-  <p class="sub">Upload a risks JSON file or add risks manually. Both paths produce the same scored register, heat map and AI response plan.</p>
-  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+<div class="card page-head">
+  <div class="eyebrow">New analysis</div>
+  <h1>What could go wrong?</h1>
+  <p class="sub">Describe your project risks once — get a scored register, a heat&nbsp;map, and an AI response plan for the big ones.</p>
+  {% if error %}<div class="error"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5M8 11.2v.3"/></svg><span>{{ error }}</span></div>{% endif %}
 
   <form id="riskForm" method="post" action="/analyze" enctype="multipart/form-data">
-    <div class="grid2">
-      <div><label>Project name</label><input type="text" name="project_name" placeholder="E-Commerce Platform Relaunch"></div>
-      <div class="grid2">
-        <div><label>Project manager</label><input type="text" name="project_manager" placeholder="Sanay"></div>
-        <div><label>Date</label><input type="date" name="date" value="2026-09-15"></div>
-      </div>
-    </div>
-
-    <div class="tabs">
-      <button type="button" class="tab active" data-tab="upload">Upload JSON</button>
-      <button type="button" class="tab" data-tab="manual">Add Risks Manually</button>
+    <div class="seg" role="tablist">
+      <button type="button" class="seg-btn active" data-tab="upload" role="tab">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 10V2M5 5l3-3 3 3M2.5 10v3.5h11V10"/></svg>
+        Upload JSON</button>
+      <button type="button" class="seg-btn" data-tab="manual" role="tab">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M3 8h10"/></svg>
+        Add manually</button>
     </div>
 
     <div class="tabpane active" id="pane-upload">
-      <div class="drop" id="drop">Drag &amp; drop JSON here or <u>browse</u><br><small id="fileName"></small></div>
+      <p class="pane-note">Project details come from your JSON — nothing else to fill in here.</p>
+      <div class="dz" id="drop">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15V3M7.5 7.5L12 3l4.5 4.5M4 13.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-5.5"/></svg>
+        <div><b>Drop your risks file here</b><br><span>or <u>browse</u> — .json only</span></div>
+        <div class="chip" id="fileChip" hidden></div>
+      </div>
       <input type="file" id="fileInput" name="json_file" accept=".json,application/json" hidden>
-      <label>Or paste JSON directly</label>
+      <div class="divider"><span>or paste</span></div>
       <textarea name="pasted_json" id="pasted" placeholder='{"project_name": "...", "risks": [...]}'></textarea>
-      <details><summary>See example JSON</summary><pre style="background:#F7F7F5;padding:12px;border-radius:8px;overflow:auto;font-size:12px">{
-  "project_name": "Mobile Banking App",
-  "project_manager": "Sanay",
-  "date": "2026-09-15",
-  "risks": [
-    {"id": "R1", "title": "Key developer leaves mid-project",
-     "category": "Resource", "probability": 3, "impact": 5,
-     "description": "Lead backend developer may resign."}
-  ]
-}</pre></details>
+      <div class="ex">
+        <div class="ex-head">
+          <button type="button" class="linklike" id="exToggle">Example JSON</button>
+          <span class="ex-btns">
+            <button type="button" class="btn btn-sm" id="exRandom">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2.5"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="10" cy="10" r="1" fill="currentColor"/><circle cx="10" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="10" r="1" fill="currentColor"/></svg>
+              Randomize</button>
+            <button type="button" class="btn btn-sm" id="exUse">Use this example</button>
+          </span>
+        </div>
+        <pre id="exPre" hidden></pre>
+      </div>
     </div>
 
     <div class="tabpane" id="pane-manual">
-      <div class="grid2">
-        <div><label>Risk title</label><input type="text" id="mTitle" placeholder="Payment API deprecation"></div>
-        <div><label>Category</label>
-          <select id="mCat">
-            <option>Technical</option><option>Resource</option><option>Schedule</option>
-            <option>Cost</option><option>External</option><option>Quality</option>
-          </select>
+      <fieldset>
+        <legend>Project</legend>
+        <div class="grid2">
+          <div><label for="fName">Project name</label><input type="text" id="fName" name="project_name" placeholder="Campus Fest Website"></div>
+          <div class="grid2">
+            <div><label for="fMgr">Manager</label><input type="text" id="fMgr" name="project_manager" placeholder="Sanay"></div>
+            <div><label for="fDate">Date</label><input type="date" id="fDate" name="date" value="2026-09-15"></div>
+          </div>
         </div>
-      </div>
-      <label>Description</label>
-      <textarea id="mDesc" style="min-height:70px" placeholder="What could happen and why it matters"></textarea>
-      <div class="grid2">
-        <div><label>Probability: <span class="scale-val" id="pVal">3</span></label>
-          <input type="range" id="mProb" min="1" max="5" value="3">
-          <div class="scale-labels"><span>Rare</span><span>Almost Certain</span></div></div>
-        <div><label>Impact: <span class="scale-val" id="iVal">3</span></label>
-          <input type="range" id="mImp" min="1" max="5" value="3">
-          <div class="scale-labels"><span>Negligible</span><span>Catastrophic</span></div></div>
-      </div>
-      <div class="btn-row"><button type="button" class="btn" id="addBtn">Add Risk</button></div>
-      <div id="manualList"></div>
+        <div class="grid2">
+          <div><label for="fCur">Currency <span class="muted">(for EMV)</span></label><input type="text" id="fCur" name="currency" value="$" maxlength="4"></div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Add a risk <span class="count" id="riskCount"></span></legend>
+        <div class="grid2">
+          <div><label for="mTitle">Risk title</label><input type="text" id="mTitle" placeholder="Payment API deprecation"></div>
+          <div><label for="mCat">Category</label>
+            <select id="mCat">
+              <option>Technical</option><option>Resource</option><option>Schedule</option>
+              <option>Cost</option><option>External</option><option>Quality</option>
+            </select>
+          </div>
+        </div>
+        <label for="mDesc">Description</label>
+        <textarea id="mDesc" class="short" placeholder="What could happen, and why it matters"></textarea>
+        <div class="grid2">
+          <div><label for="mCost">Est. cost impact <span class="muted">(optional, for EMV)</span></label><input type="number" id="mCost" min="0" step="any" placeholder="e.g. 50000"></div>
+          <div><label for="mTrig">Triggers <span class="muted">(optional IDs, comma-separated)</span></label><input type="text" id="mTrig" placeholder="R4, R7"></div>
+        </div>
+        <div class="grid2">
+          <div><label for="mProb">Probability <span class="valbadge" id="pVal">3 · Possible</span></label>
+            <input type="range" id="mProb" min="1" max="5" value="3">
+            <div class="scale-labels"><span>Rare</span><span>Almost Certain</span></div></div>
+          <div><label for="mImp">Impact <span class="valbadge" id="iVal">3 · Moderate</span></label>
+            <input type="range" id="mImp" min="1" max="5" value="3">
+            <div class="scale-labels"><span>Negligible</span><span>Catastrophic</span></div></div>
+        </div>
+        <div class="btn-row"><button type="button" class="btn" id="addBtn">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10"/></svg>
+          Add risk</button></div>
+        <div id="manualList"></div>
+      </fieldset>
       <input type="hidden" name="manual_json" id="manualJson">
     </div>
 
-    <div class="btn-row">
-      <button class="btn btn-primary" id="submitBtn" type="submit"><span class="spinner"></span><span id="submitTxt">Analyze Risks</span></button>
+    <div class="actionbar">
+      <button class="btn btn-primary btn-lg" id="submitBtn" type="submit"><span class="spinner"></span><span id="submitTxt">Analyze risks</span>
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 8h10M9 4.5L12.5 8 9 11.5"/></svg></button>
+      <p class="fine">Scored locally · only High &amp; Critical risks go to Gemini</p>
     </div>
   </form>
 </div>
 
 <script>
-const tabs=[...document.querySelectorAll('.tab')];
-tabs.forEach(t=>t.onclick=()=>{
-  tabs.forEach(x=>x.classList.remove('active'));
+/* ---- segmented tabs ---- */
+const segBtns=[...document.querySelectorAll('.seg-btn')];
+function activeTab(){return document.querySelector('.seg-btn.active').dataset.tab}
+segBtns.forEach(t=>t.onclick=()=>{
+  segBtns.forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
   t.classList.add('active');
   document.getElementById('pane-'+t.dataset.tab).classList.add('active');
 });
-const drop=document.getElementById('drop'),fi=document.getElementById('fileInput'),fn=document.getElementById('fileName');
+/* ---- dropzone ---- */
+const drop=document.getElementById('drop'),fi=document.getElementById('fileInput'),
+      chip=document.getElementById('fileChip'),pasted=document.getElementById('pasted');
 drop.onclick=()=>fi.click();
 ['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
 ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
-drop.addEventListener('drop',ev=>{fi.files=ev.dataTransfer.files;fn.textContent=fi.files[0]?fi.files[0].name:''});
-fi.onchange=()=>{fn.textContent=fi.files[0]?fi.files[0].name:''};
+drop.addEventListener('drop',ev=>{fi.files=ev.dataTransfer.files;showFile()});
+fi.onchange=showFile;
+function showFile(){
+  if(fi.files[0]){chip.hidden=false;chip.textContent='✓ '+fi.files[0].name}
+  else{chip.hidden=true;chip.textContent=''}
+}
+/* ---- randomized examples ---- */
+const EXAMPLES=[
+{"project_name":"Mobile Banking App","project_manager":"Sanay","date":"2026-09-15","risks":[
+{"id":"R1","title":"Biometric login fails on older phones","category":"Technical","probability":4,"impact":4,"description":"Fingerprint auth crashes on Android 10 and below, a fifth of the user base."},
+{"id":"R2","title":"App store review rejection","category":"Schedule","probability":3,"impact":3,"description":"Last release was rejected twice over permission wording, each round cost a week."}]},
+{"project_name":"Campus Music Festival","project_manager":"Sanay","date":"2026-09-15","risks":[
+{"id":"R1","title":"Headliner cancels last minute","category":"External","probability":4,"impact":5,"description":"The main act has cancelled twice before and no backup is signed."},
+{"id":"R2","title":"Food vendors arrive late","category":"Schedule","probability":3,"impact":3,"description":"Two vendors drive in same-day and event-day traffic is heavy."},
+{"id":"R3","title":"Poster typo","category":"Quality","probability":2,"impact":2,"description":"A spelling mistake on printed posters embarrasses but is cheap to reprint."}]},
+{"project_name":"Hospital Records Migration","project_manager":"Sanay","date":"2026-09-15","risks":[
+{"id":"R1","title":"Patient data mapping errors","category":"Quality","probability":4,"impact":5,"description":"Legacy fields don't match the new schema; a silent mismatch could corrupt records."},
+{"id":"R2","title":"Nurses undertrained on new system","category":"Resource","probability":4,"impact":4,"description":"Only half the ward staff can attend training before go-live weekend."}]},
+{"project_name":"Indie Game Launch","project_manager":"Sanay","date":"2026-09-15","risks":[
+{"id":"R1","title":"Lead artist leaves mid-production","category":"Resource","probability":3,"impact":5,"description":"The art style lives in one person's head with almost no style guide."},
+{"id":"R2","title":"Console certification failure","category":"Technical","probability":3,"impact":4,"description":"First submission failed on save-data rules; a second fail slips launch a month."},
+{"id":"R3","title":"Server bill spike at launch","category":"Cost","probability":3,"impact":3,"cost_impact":15000,"description":"Day-one traffic could triple the hosting estimate."}]},
+{"project_name":"Office Relocation","project_manager":"Sanay","date":"2026-09-15","risks":[
+{"id":"R1","title":"Internet downtime on move day","category":"Technical","probability":3,"impact":4,"description":"The ISP connection window overlaps with the team's first day in the new space."},
+{"id":"R2","title":"Lease paperwork delay","category":"External","probability":2,"impact":4,"description":"The landlord's legal review has already slipped once."},
+{"id":"R3","title":"Movers no-show","category":"Resource","probability":2,"impact":2,"description":"The booked crew has mixed reviews for punctuality."}]}
+];
+let exIdx=Math.floor(Math.random()*EXAMPLES.length);
+const exPre=document.getElementById('exPre');
+function paintExample(){exPre.textContent=JSON.stringify(EXAMPLES[exIdx],null,2)}
+paintExample();
+document.getElementById('exToggle').onclick=()=>{exPre.hidden=!exPre.hidden;if(!exPre.hidden)paintExample()};
+document.getElementById('exRandom').onclick=()=>{
+  exPre.hidden=false;
+  if(EXAMPLES.length>1){let n;do{n=Math.floor(Math.random()*EXAMPLES.length)}while(n===exIdx);exIdx=n}
+  paintExample();
+};
+document.getElementById('exUse').onclick=()=>{
+  if(exPre.hidden)exPre.hidden=false;
+  paintExample();
+  pasted.value=exPre.textContent;
+  fi.value='';showFile();
+  pasted.scrollIntoView({behavior:'smooth',block:'center'});pasted.focus();
+};
+/* ---- sliders ---- */
+const PNAMES=['','Rare','Unlikely','Possible','Likely','Almost Certain'];
+const INAMES=['','Negligible','Minor','Moderate','Major','Catastrophic'];
 const mp=document.getElementById('mProb'),mi=document.getElementById('mImp');
-mp.oninput=()=>document.getElementById('pVal').textContent=mp.value;
-mi.oninput=()=>document.getElementById('iVal').textContent=mi.value;
+mp.oninput=()=>document.getElementById('pVal').textContent=mp.value+' · '+PNAMES[mp.value];
+mi.oninput=()=>document.getElementById('iVal').textContent=mi.value+' · '+INAMES[mi.value];
+/* ---- manual list ---- */
 let risks=[],ctr=1;
+const listBox=document.getElementById('manualList'),cnt=document.getElementById('riskCount');
 document.getElementById('addBtn').onclick=()=>{
   const title=document.getElementById('mTitle').value.trim();
   const desc=document.getElementById('mDesc').value.trim();
-  if(!title){alert('Enter a risk title');return}
-  risks.push({id:'R'+(ctr++),title,category:document.getElementById('mCat').value,
-    probability:+mp.value,impact:+mi.value,description:desc||title});
+  if(!title){alert('Give the risk a title first');return}
+  const costRaw=document.getElementById('mCost').value.trim();
+  const trigRaw=document.getElementById('mTrig').value.trim();
+  const r={id:'R'+(ctr++),title,category:document.getElementById('mCat').value,
+    probability:+mp.value,impact:+mi.value,description:desc||title};
+  if(costRaw!==''){
+    const c=parseFloat(costRaw);
+    if(!isFinite(c)||c<0){alert('Cost impact must be a number ≥ 0');return}
+    r.cost_impact=c;
+  }
+  if(trigRaw!==''){r.triggers=trigRaw.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)}
+  risks.push(r);
   document.getElementById('mTitle').value='';document.getElementById('mDesc').value='';
+  document.getElementById('mCost').value='';document.getElementById('mTrig').value='';
   render();
 };
 function render(){
-  const box=document.getElementById('manualList');box.innerHTML='';
+  listBox.innerHTML='';
+  cnt.textContent=risks.length?`· ${risks.length} added`:'';
+  const sev=v=>v>=20?'b-Critical':v>=13?'b-High':v>=7?'b-Medium':'b-Low';
   risks.forEach((r,idx)=>{
     const d=document.createElement('div');d.className='rcard';
-    d.innerHTML=`<div><b>${r.id}</b> — ${r.title}<br><small>${r.category} · P${r.probability} I${r.impact}</small></div>`;
+    const s=r.probability*r.impact;
+    d.innerHTML=`<div><b>${r.id}</b> — ${r.title} <span class="pill ${sev(s)}">${s}</span><br><small>${r.category} · P${r.probability} I${r.impact}${r.cost_impact!=null?' · '+r.cost_impact:''}${r.triggers?' → '+r.triggers.join(', '):''}</small></div>`;
     const b=document.createElement('button');b.type='button';b.className='rdel';b.textContent='Remove';
     b.onclick=()=>{risks.splice(idx,1);render()};
-    d.appendChild(b);box.appendChild(d);
+    d.appendChild(b);listBox.appendChild(d);
   });
 }
+/* ---- submit: keyed off the active tab ---- */
 document.getElementById('riskForm').onsubmit=e=>{
-  const hasUpload=fi.files.length>0||document.getElementById('pasted').value.trim()!=='';
-  if(!hasUpload){
-    if(!risks.length){alert('Add at least one risk or upload JSON');e.preventDefault();return}
+  if(activeTab()==='manual'){
+    if(!risks.length){alert('Add at least one risk first');e.preventDefault();return}
     document.getElementById('manualJson').value=JSON.stringify(risks);
+  }else{
+    document.getElementById('manualJson').value='';
+    if(!fi.files.length&&!pasted.value.trim()){alert('Drop a file or paste JSON first');e.preventDefault();return}
   }
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;btn.classList.add('loading');
-  document.getElementById('submitTxt').textContent='Analyzing risks…';
+  document.getElementById('submitTxt').textContent='Analyzing…';
 };
 </script>
 {% endblock %}
