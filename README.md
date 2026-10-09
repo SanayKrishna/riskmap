@@ -30,9 +30,9 @@ Open `/` and you've got two options, both ending up on the same results page:
 - **Upload JSON** — drag and drop a file, pick one with the file browser, or paste straight into the text box. There's a collapsible example if you want the shape.
 - **Add Risks Manually** — fill in title, category, description, drag the probability/impact sliders, hit Add Risk. Each one shows up as a little card you can remove before submitting.
 
-`POST /analyze` checks everything (probability and impact have to be whole numbers 1–5, all fields present), then runs the scoring engine, builds the heat map, and calls Gemini. `GET /export` downloads the last analysis as CSV.
+`POST /analyze` checks everything (probability and impact have to be whole numbers 1–5, all fields present), then runs the scoring engine, builds the heat map, and calls Gemini. `GET /export` downloads the last analysis as CSV. `POST /snapshot` and `GET /history` save the register as a labeled time point (Week 1, Week 2…) and chart how scores move over time.
 
-Easiest first run: upload or paste `sample_risks.json`.
+Easiest first run: upload or paste `sample_risks.json`. The Example JSON box on the upload page has a Randomize button if you want something smaller to play with.
 
 ## How scoring works
 
@@ -46,11 +46,26 @@ Worth knowing about the sample file: the brief describes R4 and R5 as High, but 
 
 ## What's where
 
-- `risk_engine.py` — scoring, severity, ranking. Importable on its own, no Flask, no AI.
+- `risk_engine.py` — scoring, severity, ranking, plus EMV math (`cost_impact` → expected value at P÷5, total exposure). Importable on its own, no Flask, no AI.
 - `heatmap.py` — Plotly 5×5 grid returned as an inline HTML div. Risks sharing a cell get nudged apart so you can actually see them; hovering shows the details.
+- `velocity.py` — snapshot storage (JSON files under `data/`, one per project) and trend computation: per-risk score series with Worsened / Improved / Stable / New / Closed status, plus a Plotly trend chart.
+- `graph.py` — `triggers` link validation, cascade ranking by downstream blast radius (networkx for the math, Plotly for the map), and chain text fed into the AI prompt.
 - `ai_planner.py` — the only file that touches the AI API. Sends High and Critical risks only (no point paying tokens on Lows), demands strict JSON back, and if the call fails or the JSON is garbage it just returns an "unavailable" flag so the page still renders.
-- `exporter.py` — pandas CSV with Risk ID, Title, Category, Probability, Impact, Score, Severity, Strategy, Actions (semicolon-joined), Owner, Contingency.
+- `exporter.py` — pandas CSV with Risk ID, Title, Category, Probability, Impact, Score, Severity, Cost Impact, EMV, Linked Risks, Strategy, Actions (semicolon-joined), Owner, Contingency.
 - `app.py` — route handlers only, kept thin on purpose. Bad input re-renders the upload page with an inline message instead of a traceback.
+
+## Going further: costs, links, history
+
+Two optional fields per risk, both ignored when absent so old files keep working:
+
+```json
+{"id": "R1", "probability": 4, "impact": 5,
+ "cost_impact": 80000, "triggers": ["R4"], "...": "..."}
+```
+
+- `cost_impact` — estimated financial hit. EMV = (P÷5) × cost; the results page shows a total exposure figure (sample: $168,600.00 across 6 costed risks).
+- `triggers` — ids this risk can set off. Unknown ids and self-links are rejected with a plain message. Linked risks render as a dependency map plus a cascade table, and the AI sees the chains when planning.
+- History: hit Save snapshot on any results page (label it Week 1…), then `/history` shows the trend chart and what got better or worse. Snapshots live in `data/`, which is gitignored.
 
 ## Tests
 
