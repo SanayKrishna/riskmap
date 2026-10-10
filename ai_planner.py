@@ -93,7 +93,7 @@ def _classify_error(msg):
     return "error"
 
 
-def generate_response_plans(project_name, high_critical_risks, models=("gemini-3.5-flash", "gemini-3.6-flash"), chains=None):
+def generate_response_plans(project_name, high_critical_risks, models=("gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest"), chains=None):
     """Call Gemini for High/Critical risks only. Tries each model in order.
 
     Never raises — returns a fallback dict with a machine-readable reason:

@@ -115,7 +115,8 @@ def network_chart(analysis):
     if not any(r.get("triggers") for r in risks):
         return ""
     g = build_graph(risks)
-    pos = {n: (float(p[0]), float(p[1])) for n, p in nx.spring_layout(g, seed=42).items()}
+    # circular: even separation for every node (spring clusters chains)
+    pos = {n: (float(p[0]), float(p[1])) for n, p in nx.circular_layout(g).items()}
     edge_x, edge_y = [], []
     annotations = []
     for a, b in g.edges:
@@ -166,6 +167,9 @@ def network_chart(analysis):
         title=f"{analysis.get('project_name', 'Project')} — Dependency Map",
         margin=dict(l=20, r=20, t=60, b=20),
         plot_bgcolor="white", paper_bgcolor="white",
+        hovermode="closest",
+        hoverlabel=dict(bgcolor="white", bordercolor="#D4D1C8",
+                        font=dict(family="Inter, sans-serif", size=13, color="#141414")),
         xaxis=dict(visible=False), yaxis=dict(visible=False),
         annotations=annotations,
     )

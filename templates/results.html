@@ -16,70 +16,55 @@
 {% block content %}
 
 <!-- ════════════════════════════════════════
-     REPORT HEADER — editorial, no eyebrow
+     SECTION NAV + VERDICT HERO
      ════════════════════════════════════════ -->
-<div class="report-header-card">
-  <div class="report-header">
-    <div>
-      <h1 style="margin-bottom:8px">{{ analysis.project_name }}</h1>
-      <p style="color:var(--muted);font-size:13.5px;margin:0">
-        {{ analysis.date }}
-        {% if analysis.project_manager %} &nbsp;·&nbsp; {{ analysis.project_manager }}{% endif %}
-        &nbsp;·&nbsp; {{ analysis.total_count }} risks
-      </p>
+<nav class="pagenav">
+  <a href="#summary">Summary</a>
+  <a href="#heatmap">Heat map</a>
+  <a href="#register">Register</a>
+  {% if cascade %}<a href="#depmap">Map</a>{% endif %}
+  <a href="#plan">Plan</a>
+</nav>
+
+<header class="verdict" id="summary">
+  <div class="verdict-main">
+    <div class="eyebrow">Risk report · {{ analysis.date }}{% if analysis.project_manager %} · {{ analysis.project_manager }}{% endif %}</div>
+    <h1>{{ analysis.project_name }}</h1>
+    {% set top = analysis.risks[0] %}
+    <p class="verdict-line">
+      {% if analysis.critical_count %}<b>{{ analysis.critical_count }} Critical</b> risk{{ "s" if analysis.critical_count != 1 }} on the books — start with {{ top.id }}: {{ top.title }}.
+      {% elif analysis.high_count %}No Critical risks. <b>{{ analysis.high_count }} High</b> lead{{ "s" if analysis.high_count != 1 }} — start with {{ top.id }}: {{ top.title }}.
+      {% else %}Nothing above Medium. Highest is {{ top.id }} ({{ top.score }}).{% endif %}
+    </p>
+    <div class="verdict-actions">
+      <a class="btn btn-primary btn-sm" href="/export">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>
+        Export CSV</a>
+      <form method="post" action="/snapshot" class="snapinline">
+        <input type="hidden" name="project" value="{{ analysis.project_name }}">
+        <input type="text" name="label" placeholder="Week 1" required>
+        <button class="btn btn-sm" type="submit">Snapshot</button>
+      </form>
+      <a class="quiet" href="/history?project={{ analysis.project_name|urlencode }}">History →</a>
+      <a class="quiet" href="/">＋ New</a>
     </div>
-    <span class="badge b-{{ analysis.overall_level }}">{{ analysis.overall_level }}</span>
   </div>
-  <div class="report-nav">
-    <a href="/history?project={{ analysis.project_name|urlencode }}" style="font-size:13px;color:var(--muted);text-decoration:none;font-weight:500">View history</a>
-    <form method="post" action="/snapshot" style="display:flex;gap:8px;align-items:center">
-      <input type="hidden" name="project" value="{{ analysis.project_name }}">
-      <input type="text" name="label" placeholder="Snapshot label" required style="width:160px;padding:7px 11px;font-size:13px">
-      <button class="btn btn-sm" type="submit">Save snapshot</button>
-    </form>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════
-     STAT STRIP — one component, not 4 cards
-     ════════════════════════════════════════ -->
-<div class="stat-strip">
-  <div class="stat">
-    <b>{{ analysis.total_count }}</b>
-    <span>Total risks</span>
-  </div>
-  <div class="stat">
-    <b>{{ analysis.critical_count }}</b>
-    <span>Critical</span>
-  </div>
-  <div class="stat">
-    <b>{{ analysis.high_count }}</b>
-    <span>High</span>
-  </div>
-  <div class="stat">
-    <b>{{ analysis.medium_count + analysis.low_count }}</b>
-    <span>Medium &amp; Low</span>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════
-     EMV (conditional)
-     ════════════════════════════════════════ -->
-{% if analysis.exposure_count %}
-<div class="card" style="border-left:4px solid var(--accent);padding:24px 28px">
-  <span class="exposure-total">{{ analysis.currency }}{{ "{:,.0f}".format(analysis.total_exposure) }}</span>
-  <p style="color:var(--muted);font-size:13.5px;margin-top:4px">
-    Expected monetary value across {{ analysis.exposure_count }} costed risk{{ "s" if analysis.exposure_count != 1 }}
-    <span style="margin:0 6px;color:var(--muted-2)">·</span>
-    P÷5 × cost impact
-  </p>
-</div>
-{% endif %}
+  <aside class="verdict-side">
+    <span class="badge big b-{{ analysis.overall_level }}">{{ analysis.overall_level }}</span>
+    <dl class="metrics">
+      <div><dt>Total risks</dt><dd>{{ analysis.total_count }}</dd></div>
+      <div><dt>Critical</dt><dd>{{ analysis.critical_count }}</dd></div>
+      <div><dt>High</dt><dd>{{ analysis.high_count }}</dd></div>
+      <div><dt>Medium + Low</dt><dd>{{ analysis.medium_count + analysis.low_count }}</dd></div>
+      {% if analysis.exposure_count %}<div><dt>Exposure</dt><dd>{{ analysis.currency }}{{ "{:,.0f}".format(analysis.total_exposure) }}</dd></div>{% endif %}
+    </dl>
+  </aside>
+</header>
 
 <!-- ════════════════════════════════════════
      HEAT MAP
      ════════════════════════════════════════ -->
-<div class="card">
+<div class="card" id="heatmap">
   <h2>Heat map</h2>
   <div class="plotly-div">{{ heatmap_div|safe }}</div>
 </div>
@@ -87,7 +72,7 @@
 <!-- ════════════════════════════════════════
      RISK REGISTER — clean table, no row bgs
      ════════════════════════════════════════ -->
-<div class="card">
+<div class="card" id="register">
   <h2>Risk register</h2>
   <div class="table-scroll">
     <table>
@@ -135,7 +120,7 @@
      CASCADE / DEPENDENCY (conditional)
      ════════════════════════════════════════ -->
 {% if cascade %}
-<div class="card">
+<div class="card" id="depmap">
   <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <h2 style="margin:0">Dependency map</h2>
     <span style="font-size:13px;color:var(--muted)">arrow: triggers · {{ cascade|length }} chain{{ "s" if cascade|length != 1 }}</span>
@@ -177,7 +162,7 @@
 <!-- ════════════════════════════════════════
      AI RESPONSE PLAN — report flow, no cards
      ════════════════════════════════════════ -->
-<div class="ai-section">
+<div class="ai-section" id="plan">
   <div class="ai-section-header">
     <h2>Response plan</h2>
     <span style="font-size:13px;color:var(--muted)">High &amp; Critical only · via Gemini</span>

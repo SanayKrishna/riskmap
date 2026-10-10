@@ -159,6 +159,9 @@ def trend_chart(project):
         margin=dict(l=60, r=20, t=60, b=120),
         plot_bgcolor="white",
         paper_bgcolor="white",
+        hovermode="closest",
+        hoverlabel=dict(bgcolor="white", bordercolor="#D4D1C8",
+                        font=dict(family="Inter, sans-serif", size=13, color="#141414")),
         legend=dict(orientation="h", y=-0.34, x=0),
     )
     return plot(fig, output_type="div", include_plotlyjs=False)

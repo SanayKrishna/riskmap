@@ -79,10 +79,10 @@ def generate_heatmap(analysis):
                     textfont=dict(color="white", size=11),
                     name=f"{r['id']} ({r['severity']})",
                     hovertemplate=(
-                        f"<b>{r['id']}</b> — {r['title']}<br>"
-                        f"Score: {r['score']} | {r['severity']}<br>"
-                        f"P={r['probability']} I={r['impact']}<br>"
-                        f"{r['description']}<extra></extra>"
+                        f"<b>{r['id']} · {r['title']}</b><br>"
+                        f"Score {r['score']} — {r['severity']}<br>"
+                        f"Probability {r['probability']} · Impact {r['impact']}<br>"
+                        f"<i>{r['description']}</i><extra></extra>"
                     ),
                     showlegend=False,
                 )
@@ -122,6 +122,9 @@ def generate_heatmap(analysis):
         margin=dict(l=60, r=20, t=60, b=150),
         plot_bgcolor="white",
         paper_bgcolor="white",
+        hovermode="closest",
+        hoverlabel=dict(bgcolor="white", bordercolor="#D4D1C8",
+                        font=dict(family="Inter, sans-serif", size=13, color="#141414")),
         legend=dict(orientation="h", y=-0.38, x=0),
     )
 
