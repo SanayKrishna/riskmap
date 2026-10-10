@@ -4,6 +4,14 @@ import networkx as nx
 
 SEV_WEIGHT = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
 
+# marker palette mirrors the page chips: tinted fill, dark text, colored rim
+NODE_STYLE = {
+    "Critical": ("#FEF2F2", "#C41A1A", "#C41A1A"),
+    "High": ("#FFF4EE", "#B94008", "#B94008"),
+    "Medium": ("#FFFBEB", "#A35D0A", "#A35D0A"),
+    "Low": ("#F0FDF4", "#166534", "#166534"),
+}
+
 
 def validate_links(risks):
     """Cross-check triggers against real ids. Raises ValueError."""
@@ -28,6 +36,16 @@ def build_graph(risks):
         for t in r.get("triggers", []) or []:
             g.add_edge(r["id"], t)
     return g
+
+
+def isolated_nodes(risks):
+    """Risks with no links in either direction (float free on the map)."""
+    linked = set()
+    for r in risks:
+        for t in r.get("triggers", []) or []:
+            linked.add(r["id"])
+            linked.add(t)
+    return [r for r in risks if r["id"] not in linked]
 
 
 def cascade_ranking(risks):
@@ -97,28 +115,43 @@ def network_chart(analysis):
     if not any(r.get("triggers") for r in risks):
         return ""
     g = build_graph(risks)
-    pos = nx.spring_layout(g, seed=42)
+    pos = {n: (float(p[0]), float(p[1])) for n, p in nx.spring_layout(g, seed=42).items()}
     edge_x, edge_y = [], []
+    annotations = []
     for a, b in g.edges:
-        edge_x += [pos[a][0], pos[b][0], None]
-        edge_y += [pos[a][1], pos[b][1], None]
+        x0, y0 = pos[a]
+        x1, y1 = pos[b]
+        edge_x += [x0, x1, None]
+        edge_y += [y0, y1, None]
+        # shorten so the arrow tip lands on the target marker rim, not its center
+        dx, dy = x1 - x0, y1 - y0
+        annotations.append(
+            dict(
+                ax=x0 + 0.12 * dx, ay=y0 + 0.12 * dy,
+                x=x1 - 0.16 * dx, y=y1 - 0.16 * dy,
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=2, arrowsize=1.1, arrowwidth=2,
+                arrowcolor="#6B7280", opacity=0.9,
+            )
+        )
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(x=edge_x, y=edge_y, mode="lines",
-                   line=dict(color="#C9C7BE", width=1.5),
+                   line=dict(color="#8C8C8C", width=2),
                    hoverinfo="skip", showlegend=False)
     )
     for node in g.nodes:
         n = g.nodes[node]
         down = sorted(nx.descendants(g, node))
+        fill, rim, text = NODE_STYLE.get(n.get("severity", "Low"), NODE_STYLE["Low"])
         fig.add_trace(
             go.Scatter(
                 x=[pos[node][0]], y=[pos[node][1]],
                 mode="markers+text",
-                marker=dict(color=n.get("color", "#6B7280"), size=30,
-                            line=dict(color="white", width=2)),
+                marker=dict(color=fill, size=32,
+                            line=dict(color=rim, width=2)),
                 text=[node], textposition="middle center",
-                textfont=dict(color="white", size=11),
+                textfont=dict(color=text, size=11),
                 name=node,
                 hovertemplate=(
                     f"<b>{node}</b> — {n.get('title', '')}<br>"
@@ -134,5 +167,6 @@ def network_chart(analysis):
         margin=dict(l=20, r=20, t=60, b=20),
         plot_bgcolor="white", paper_bgcolor="white",
         xaxis=dict(visible=False), yaxis=dict(visible=False),
+        annotations=annotations,
     )
     return plot(fig, output_type="div", include_plotlyjs=False)

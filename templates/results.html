@@ -1,113 +1,233 @@
 {% extends "base.html" %}
+
 {% block title %}{{ analysis.project_name }} — Results{% endblock %}
+
+{% block topbar_right %}
+<a class="btn btn-sm" href="/">
+  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M3 8h10"/></svg>
+  New analysis
+</a>
+<a class="btn btn-sm btn-primary" href="/export">
+  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>
+  Export CSV
+</a>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-  <div class="report-head">
+
+<!-- ════════════════════════════════════════
+     REPORT HEADER — editorial, no eyebrow
+     ════════════════════════════════════════ -->
+<div class="report-header-card">
+  <div class="report-header">
     <div>
-      <div class="eyebrow">Risk report</div>
-      <h1>{{ analysis.project_name }}</h1>
-      <p class="meta">{{ analysis.date }}<span class="dot">·</span>{% if analysis.project_manager %}PM {{ analysis.project_manager }}<span class="dot">·</span>{% endif %}{{ analysis.total_count }} risks scored</p>
+      <h1 style="margin-bottom:8px">{{ analysis.project_name }}</h1>
+      <p style="color:var(--muted);font-size:13.5px;margin:0">
+        {{ analysis.date }}
+        {% if analysis.project_manager %} &nbsp;·&nbsp; {{ analysis.project_manager }}{% endif %}
+        &nbsp;·&nbsp; {{ analysis.total_count }} risks
+      </p>
     </div>
-    <span class="badge b-{{ analysis.overall_level }}">{{ analysis.overall_level }} Risk</span>
+    <span class="badge b-{{ analysis.overall_level }}">{{ analysis.overall_level }}</span>
+  </div>
+  <div class="report-nav">
+    <a href="/history?project={{ analysis.project_name|urlencode }}" style="font-size:13px;color:var(--muted);text-decoration:none;font-weight:500">View history</a>
+    <form method="post" action="/snapshot" style="display:flex;gap:8px;align-items:center">
+      <input type="hidden" name="project" value="{{ analysis.project_name }}">
+      <input type="text" name="label" placeholder="Snapshot label" required style="width:160px;padding:7px 11px;font-size:13px">
+      <button class="btn btn-sm" type="submit">Save snapshot</button>
+    </form>
   </div>
 </div>
 
-<div class="stats">
-  <div class="stat"><b>{{ analysis.total_count }}</b><span>Total Risks</span></div>
-  <div class="stat"><b>{{ analysis.critical_count }}</b><span>Critical</span></div>
-  <div class="stat"><b>{{ analysis.high_count }}</b><span>High</span></div>
-  <div class="stat"><b>{{ analysis.medium_count + analysis.low_count }}</b><span>Medium + Low</span></div>
+<!-- ════════════════════════════════════════
+     STAT STRIP — one component, not 4 cards
+     ════════════════════════════════════════ -->
+<div class="stat-strip">
+  <div class="stat">
+    <b>{{ analysis.total_count }}</b>
+    <span>Total risks</span>
+  </div>
+  <div class="stat">
+    <b>{{ analysis.critical_count }}</b>
+    <span>Critical</span>
+  </div>
+  <div class="stat">
+    <b>{{ analysis.high_count }}</b>
+    <span>High</span>
+  </div>
+  <div class="stat">
+    <b>{{ analysis.medium_count + analysis.low_count }}</b>
+    <span>Medium &amp; Low</span>
+  </div>
 </div>
 
+<!-- ════════════════════════════════════════
+     EMV (conditional)
+     ════════════════════════════════════════ -->
 {% if analysis.exposure_count %}
-<div class="card exposure">
-  <div class="exposure-total">{{ analysis.currency }}{{ "{:,.2f}".format(analysis.total_exposure) }}</div>
-  <p class="muted" style="margin:4px 0 0">Expected monetary value across {{ analysis.exposure_count }} costed risk{{ "s" if analysis.exposure_count != 1 }} · P÷5 × cost impact</p>
+<div class="card" style="border-left:4px solid var(--accent);padding:24px 28px">
+  <span class="exposure-total">{{ analysis.currency }}{{ "{:,.0f}".format(analysis.total_exposure) }}</span>
+  <p style="color:var(--muted);font-size:13.5px;margin-top:4px">
+    Expected monetary value across {{ analysis.exposure_count }} costed risk{{ "s" if analysis.exposure_count != 1 }}
+    <span style="margin:0 6px;color:var(--muted-2)">·</span>
+    P÷5 × cost impact
+  </p>
 </div>
 {% endif %}
 
+<!-- ════════════════════════════════════════
+     HEAT MAP
+     ════════════════════════════════════════ -->
 <div class="card">
-  <h2>Risk Heat Map</h2>
+  <h2>Heat map</h2>
   <div class="plotly-div">{{ heatmap_div|safe }}</div>
 </div>
 
+<!-- ════════════════════════════════════════
+     RISK REGISTER — clean table, no row bgs
+     ════════════════════════════════════════ -->
 <div class="card">
-  <h2>Risk Register Table</h2>
+  <h2>Risk register</h2>
   <div class="table-scroll">
-  <table>
-    <tr><th>Rank</th><th>ID</th><th>Title</th><th>Category</th><th>P</th><th>I</th><th>Score</th><th>Severity</th>{% if analysis.exposure_count %}<th>EMV</th>{% endif %}<th>Description</th></tr>
-    {% for r in analysis.risks %}
-    <tr class="sev-{{ r.severity }}">
-      <td>{{ r.priority_rank }}</td><td><b>{{ r.id }}</b></td><td>{{ r.title }}{% if r.triggers %}<br><small class="muted">→ {{ r.triggers|join(', ') }}</small>{% endif %}</td>
-      <td>{{ r.category }}</td><td>{{ r.probability }}</td><td>{{ r.impact }}</td>
-      <td><b>{{ r.score }}</b></td>
-      <td><span class="pill b-{{ r.severity }}">{{ r.severity }}</span></td>
-      {% if analysis.exposure_count %}<td>{% if r.emv is not none %}{{ analysis.currency }}{{ "{:,.0f}".format(r.emv) }}{% endif %}</td>{% endif %}
-      <td class="muted">{{ r.description }}</td>
-    </tr>
-    {% endfor %}
-  </table>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>ID</th>
+          <th>Risk</th>
+          <th>Category</th>
+          <th style="text-align:center">P</th>
+          <th style="text-align:center">I</th>
+          <th style="text-align:center">Score</th>
+          <th>Severity</th>
+          {% if analysis.exposure_count %}<th>EMV</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in analysis.risks %}
+        <tr class="sev-{{ r.severity }}">
+          <td style="color:var(--muted-2);font-size:12px;font-variant-numeric:tabular-nums">{{ r.priority_rank }}</td>
+          <td><b style="font-size:13px">{{ r.id }}</b></td>
+          <td>
+            <span style="font-weight:500;color:var(--ink)">{{ r.title }}</span>
+            {% if r.triggers %}<br><small class="muted">→ {{ r.triggers|join(', ') }}</small>{% endif %}
+            {% if r.description %}<br><small class="muted">{{ r.description }}</small>{% endif %}
+          </td>
+          <td style="color:var(--muted);font-size:13px;white-space:nowrap">{{ r.category }}</td>
+          <td style="text-align:center;color:var(--ink-2)">{{ r.probability }}</td>
+          <td style="text-align:center;color:var(--ink-2)">{{ r.impact }}</td>
+          <td style="text-align:center"><b>{{ r.score }}</b></td>
+          <td><span class="pill b-{{ r.severity }}">{{ r.severity }}</span></td>
+          {% if analysis.exposure_count %}
+          <td style="font-size:13px;font-variant-numeric:tabular-nums">
+            {% if r.emv is not none %}{{ analysis.currency }}{{ "{:,.0f}".format(r.emv) }}{% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 
+<!-- ════════════════════════════════════════
+     CASCADE / DEPENDENCY (conditional)
+     ════════════════════════════════════════ -->
 {% if cascade %}
 <div class="card">
-  <h2>Dependency Map</h2>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <h2 style="margin:0">Dependency map</h2>
+    <span style="font-size:13px;color:var(--muted)">arrow: triggers · {{ cascade|length }} chain{{ "s" if cascade|length != 1 }}</span>
+  </div>
   <div class="plotly-div">{{ network_div|safe }}</div>
+  {% if unlinked %}
+  <p style="font-size:13px;color:var(--muted);margin:10px 0 0">{{ unlinked|map(attribute='id')|join(', ') }} {{ "has" if unlinked|length == 1 else "have" }} no links and {{ "floats" if unlinked|length == 1 else "float" }} free on the map.</p>
+  {% endif %}
 </div>
 
 <div class="card">
-  <h2>Cascade Risks <small class="muted">(trigger other risks)</small></h2>
+  <h2>Cascade risks</h2>
+  <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px">Risks that, if they occur, set off others</p>
   <div class="table-scroll" style="max-height:300px">
-  <table>
-    <tr><th>ID</th><th>Title</th><th>Sets off</th><th>Worst downstream</th></tr>
-    {% for c in cascade %}
-    <tr>
-      <td><b>{{ c.id }}</b></td><td>{{ c.title }}</td>
-      <td>{{ c.downstream|join(', ') }} <span class="muted">({{ c.blast }})</span></td>
-      <td><span class="pill b-{{ c.max_downstream_severity }}">{{ c.max_downstream_severity }}</span></td>
-    </tr>
-    {% endfor %}
-  </table>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Risk</th>
+          <th>Sets off</th>
+          <th>Worst downstream</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cascade %}
+        <tr>
+          <td><b>{{ c.id }}</b></td>
+          <td>{{ c.title }}</td>
+          <td>{{ c.downstream|join(', ') }} <span class="muted" style="font-size:12px">({{ c.blast }})</span></td>
+          <td><span class="pill b-{{ c.max_downstream_severity }}">{{ c.max_downstream_severity }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endif %}
 
-<div class="card">
-  <h2>AI Response Plan <small class="muted">(High &amp; Critical only)</small></h2>
+<!-- ════════════════════════════════════════
+     AI RESPONSE PLAN — document style
+     ════════════════════════════════════════ -->
+<div class="ai-section">
+  <div class="ai-section-header">
+    <h2>Response plan</h2>
+    <span style="font-size:13px;color:var(--muted)">High &amp; Critical only · via Gemini</span>
+  </div>
+
   {% if not ai.available %}
-    <div class="ai-card"><b>AI response plan unavailable</b>
-      <p class="muted">The Gemini call failed or no key is configured. The scored register above is unaffected. Details logged to <code>ai_log.txt</code>.</p>
-    </div>
+  <div class="callout" style="background:var(--high-bg);border-color:var(--high-line);margin-top:12px">
+    <b>AI plan unavailable.</b> The Gemini call failed or no key is set.
+    Scored register above is unaffected — see <code>ai_log.txt</code> for details.
+  </div>
   {% endif %}
+
   {% for r in analysis.risks if r.severity in ('High','Critical') %}
     {% set plan = ai.plans.get(r.id) if ai.plans else None %}
     <details class="ai-card"{% if loop.first %} open{% endif %}>
       <summary>
-        <span><b>{{ r.id }}</b> — {{ r.title }} <span class="pill b-{{ r.severity }}">{{ r.severity }} · {{ r.score }}</span></span>
-        <span>{% if plan %}<span class="pill b-{{ plan.strategy }}">{{ plan.strategy }}</span>{% endif %} <span class="ai-toggle">＋</span></span>
+        <span>
+          <b>{{ r.id }}</b>
+          <span style="margin:0 6px;color:var(--muted-2)">—</span>
+          {{ r.title }}
+          <span class="pill b-{{ r.severity }}" style="margin-left:8px">{{ r.severity }} {{ r.score }}</span>
+        </span>
+        <span style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          {% if plan %}
+          <span class="strategy-tag t-{{ plan.strategy }}">{{ plan.strategy }}</span>
+          {% endif %}
+          <span class="ai-toggle"></span>
+        </span>
       </summary>
       <div class="ai-body">
-      {% if plan %}
-        <p><i>{{ plan.strategy_justification }}</i></p>
-        <ol class="actions">{% for a in plan.actions %}<li>{{ a }}</li>{% endfor %}</ol>
-        <p>Owner: <span class="owner">{{ plan.owner }}</span></p>
-        <div class="contingency"><b>Contingency:</b> {{ plan.contingency }}</div>
-      {% else %}
-        <p class="muted">No AI plan for {{ r.id }} (AI unavailable or skipped).</p>
-      {% endif %}
+        {% if plan %}
+          <div style="padding-top:16px">
+            <p style="font-size:14px;color:var(--muted);font-style:italic;margin-bottom:14px">{{ plan.strategy_justification }}</p>
+            <ol class="actions">
+              {% for a in plan.actions %}<li>{{ a }}</li>{% endfor %}
+            </ol>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13.5px">
+              <span style="color:var(--muted)">Owner</span>
+              <span class="owner">{{ plan.owner }}</span>
+            </div>
+            <div class="contingency" style="margin-top:12px">
+              <b>Contingency:</b> {{ plan.contingency }}
+            </div>
+          </div>
+        {% else %}
+          <p class="muted" style="padding-top:14px">No plan for {{ r.id }} — AI unavailable or skipped.</p>
+        {% endif %}
       </div>
     </details>
   {% endfor %}
 </div>
 
-<div class="center">
-  <a class="btn btn-primary" href="/export">Download Risk Register (CSV)</a><br><br>
-  <form method="post" action="/snapshot" class="snapform">
-    <input type="hidden" name="project" value="{{ analysis.project_name }}">
-    <input type="text" name="label" placeholder="Week 1" required>
-    <button class="btn" type="submit">Save snapshot</button>
-  </form>
-  <p><a href="/history?project={{ analysis.project_name|urlencode }}">View history →</a> · <a href="/">Analyze Another Project</a></p>
-</div>
 {% endblock %}

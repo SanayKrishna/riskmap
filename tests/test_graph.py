@@ -58,3 +58,24 @@ def test_network_chart_div():
     div = network_chart({"project_name": "P", "risks": _risks()})
     assert "Dependency Map" in div and "R1" in div
     assert network_chart({"project_name": "P", "risks": []}) == ""
+
+
+def test_network_chart_arrows_and_isolation():
+    from unittest.mock import patch
+    import plotly.offline
+    from graph import isolated_nodes, network_chart
+    assert [r["id"] for r in isolated_nodes(_risks())] == []
+    lone = _risks() + [
+        {"id": "R9", "title": "Lone", "category": "Cost",
+         "probability": 1, "impact": 1, "score": 1, "severity": "Low",
+         "color": "#16A34A", "description": "d", "triggers": []},
+    ]
+    assert [r["id"] for r in isolated_nodes(lone)] == ["R9"]
+    captured = {}
+    with patch.object(plotly.offline, "plot", lambda fig, **kw: captured.setdefault("fig", fig) or ""):
+        network_chart({"project_name": "P", "risks": _risks()})
+    fig = captured["fig"]
+    from graph import build_graph
+    n_edges = len(list(build_graph(_risks()).edges))
+    assert len(fig.layout.annotations) == n_edges == 2  # one arrow per edge
+    assert all(a.showarrow for a in fig.layout.annotations)
