@@ -86,46 +86,62 @@ def _normalize(data):
     return plans
 
 
-def generate_response_plans(project_name, high_critical_risks, model_name="gemini-3.5-flash", chains=None):
-    """Call Gemini for High/Critical risks only. Never raises — returns fallback dict."""
+def _classify_error(msg):
+    low = (msg or "").lower()
+    if "503" in low or "overload" in low or "high demand" in low or "unavailable" in low:
+        return "overloaded"
+    return "error"
+
+
+def generate_response_plans(project_name, high_critical_risks, models=("gemini-3.5-flash", "gemini-3.6-flash"), chains=None):
+    """Call Gemini for High/Critical risks only. Tries each model in order.
+
+    Never raises — returns a fallback dict with a machine-readable reason:
+    'no-key' | 'overloaded' | 'error'."""
+
     # safety filter: never send Low/Medium even if caller slips
     risks = [r for r in (high_critical_risks or []) if r.get("severity") in ("High", "Critical")]
     if not risks:
-        return {"available": True, "plans": {}, "model": model_name}
+        return {"available": True, "reason": "", "plans": {}, "model": models[0]}
 
     prompt = build_prompt(project_name, risks, chains=chains)
     key = _api_key()
     if not key:
         _log(prompt, "ERROR: missing GEMINI_API_KEY")
-        return {"available": False, "error": "Missing GEMINI_API_KEY in .env", "plans": {}}
+        return {"available": False, "reason": "no-key",
+                "error": "Missing GEMINI_API_KEY in .env", "plans": {}}
 
-    try:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=key)
-        resp = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.3,
-            ),
-        )
-        raw = getattr(resp, "text", "") or ""
-        _log(prompt, raw)
-        # strip code fences if model adds them despite instructions
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.strip("`")
-            # remove leading 'json' marker
-            if cleaned.lower().startswith("json"):
-                cleaned = cleaned[4:]
-            cleaned = cleaned.strip()
-        plans = _normalize(json.loads(cleaned))
-        return {"available": True, "plans": plans, "model": model_name}
-    except Exception as exc:  # noqa: BLE001 — fallback must never crash the page
+    last_err = ""
+    for model_name in models:
         try:
-            _log(prompt, f"ERROR: {exc}")
-        except Exception:
-            pass
-        return {"available": False, "error": str(exc)[:300], "plans": {}}
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=key)
+            resp = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.3,
+                ),
+            )
+            raw = getattr(resp, "text", "") or ""
+            _log(prompt, raw)
+            # strip code fences if model adds them despite instructions
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.strip("`")
+                # remove leading 'json' marker
+                if cleaned.lower().startswith("json"):
+                    cleaned = cleaned[4:]
+                cleaned = cleaned.strip()
+            plans = _normalize(json.loads(cleaned))
+            return {"available": True, "reason": "", "plans": plans, "model": model_name}
+        except Exception as exc:  # noqa: BLE001 — try next model, never crash the page
+            last_err = str(exc)[:300]
+            try:
+                _log(prompt, f"ERROR [{model_name}]: {exc}")
+            except Exception:
+                pass
+    return {"available": False, "reason": _classify_error(last_err),
+            "error": last_err, "plans": {}}

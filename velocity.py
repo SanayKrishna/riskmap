@@ -156,9 +156,9 @@ def trend_chart(project):
         title=f"{project} — Risk Velocity",
         xaxis=dict(title="Time point"),
         yaxis=dict(title="Risk score", range=[0, 26]),
-        margin=dict(l=60, r=20, t=60, b=60),
+        margin=dict(l=60, r=20, t=60, b=120),
         plot_bgcolor="white",
         paper_bgcolor="white",
-        legend=dict(orientation="h", y=-0.25, x=0),
+        legend=dict(orientation="h", y=-0.34, x=0),
     )
     return plot(fig, output_type="div", include_plotlyjs=False)

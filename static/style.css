@@ -947,7 +947,7 @@ strong { font-weight: 600 }
 .strategy-tag.t-Transfer { color: #1D4ED8;      border-color: #BFDBFE }
 .strategy-tag.t-Accept   { color: var(--muted); border-color: var(--line-2) }
 
-/* AI plan section — document style */
+/* AI plan section — report flow, no cards */
 .ai-section { margin-bottom: 20px }
 .ai-section-header {
   display: flex;
@@ -963,6 +963,33 @@ strong { font-weight: 600 }
   margin: 0;
   font-size: 22px;
 }
+
+/* Report flow — ruled sections, index nav, no boxes */
+.risk-index {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 0 2px;
+  font-size: 13.5px;
+  flex-wrap: wrap;
+}
+.risk-index a { color: var(--accent); font-weight: 700; text-decoration: none }
+.risk-index a:hover { text-decoration: underline }
+.risk-index span { color: var(--muted-2) }
+.risk-report { padding: 22px 0; border-top: 1px solid var(--line) }
+.risk-report:first-of-type { border-top: none; padding-top: 14px }
+.risk-report h3 {
+  font-size: 19px;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rr-meta { font-size: 13.5px; color: var(--muted); margin: 0 0 8px }
+.rr-meta b { color: var(--ink) }
+.rr-meta span { margin: 0 4px }
+.rr-just { font-size: 14px; color: var(--muted); font-style: italic; margin: 0 0 6px }
 
 /* Section label (results page sections without full card) */
 .section-label {

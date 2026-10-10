@@ -107,10 +107,11 @@ def generate_heatmap(analysis):
     fig.update_layout(
         title=f"{project_name} — Risk Heat Map",
         xaxis=dict(
-            title="Impact",
+            title="Impact · 1 Negligible → 5 Catastrophic",
             tickvals=[1, 2, 3, 4, 5],
-            ticktext=[f"{i} — {lbl}" for i, lbl in enumerate(IMPACT_LABELS, 1)],
+            ticktext=["1", "2", "3", "4", "5"],
             range=[0.5, 5.5],
+            title_standoff=12,
         ),
         yaxis=dict(
             title="Probability",
@@ -118,10 +119,10 @@ def generate_heatmap(analysis):
             ticktext=[f"{p} — {lbl}" for p, lbl in enumerate(PROB_LABELS, 1)],
             range=[0.5, 5.5],
         ),
-        margin=dict(l=60, r=20, t=60, b=60),
+        margin=dict(l=60, r=20, t=60, b=150),
         plot_bgcolor="white",
         paper_bgcolor="white",
-        legend=dict(orientation="h", y=-0.22, x=0),
+        legend=dict(orientation="h", y=-0.38, x=0),
     )
 
     return plot(fig, output_type="div", include_plotlyjs=False)

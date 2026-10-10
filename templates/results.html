@@ -175,7 +175,7 @@
 {% endif %}
 
 <!-- ════════════════════════════════════════
-     AI RESPONSE PLAN — document style
+     AI RESPONSE PLAN — report flow, no cards
      ════════════════════════════════════════ -->
 <div class="ai-section">
   <div class="ai-section-header">
@@ -185,48 +185,37 @@
 
   {% if not ai.available %}
   <div class="callout" style="background:var(--high-bg);border-color:var(--high-line);margin-top:12px">
-    <b>AI plan unavailable.</b> The Gemini call failed or no key is set.
-    Scored register above is unaffected — see <code>ai_log.txt</code> for details.
+    {% if ai.reason == 'no-key' %}
+    <b>AI plan unavailable — no API key set.</b> Add <code>GEMINI_API_KEY</code> to your <code>.env</code> and re-run the analysis. The scored register above is unaffected.
+    {% elif ai.reason == 'overloaded' %}
+    <b>AI plan unavailable — Gemini is overloaded right now.</b> Your register above is complete; re-run the analysis in a few minutes to get the response plan.
+    {% else %}
+    <b>AI plan unavailable.</b> <span class="muted">{{ ai.error }}</span>
+    {% endif %}
   </div>
   {% endif %}
 
+  <nav class="risk-index">
+    {% for r in analysis.risks if r.severity in ('High','Critical') %}<a href="#plan-{{ r.id }}">{{ r.id }}</a>{% if not loop.last %}<span>·</span>{% endif %}{% endfor %}
+  </nav>
+
   {% for r in analysis.risks if r.severity in ('High','Critical') %}
     {% set plan = ai.plans.get(r.id) if ai.plans else None %}
-    <details class="ai-card"{% if loop.first %} open{% endif %}>
-      <summary>
-        <span>
-          <b>{{ r.id }}</b>
-          <span style="margin:0 6px;color:var(--muted-2)">—</span>
-          {{ r.title }}
-          <span class="pill b-{{ r.severity }}" style="margin-left:8px">{{ r.severity }} {{ r.score }}</span>
-        </span>
-        <span style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          {% if plan %}
-          <span class="strategy-tag t-{{ plan.strategy }}">{{ plan.strategy }}</span>
-          {% endif %}
-          <span class="ai-toggle"></span>
-        </span>
-      </summary>
-      <div class="ai-body">
-        {% if plan %}
-          <div style="padding-top:16px">
-            <p style="font-size:14px;color:var(--muted);font-style:italic;margin-bottom:14px">{{ plan.strategy_justification }}</p>
-            <ol class="actions">
-              {% for a in plan.actions %}<li>{{ a }}</li>{% endfor %}
-            </ol>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13.5px">
-              <span style="color:var(--muted)">Owner</span>
-              <span class="owner">{{ plan.owner }}</span>
-            </div>
-            <div class="contingency" style="margin-top:12px">
-              <b>Contingency:</b> {{ plan.contingency }}
-            </div>
-          </div>
-        {% else %}
-          <p class="muted" style="padding-top:14px">No plan for {{ r.id }} — AI unavailable or skipped.</p>
-        {% endif %}
-      </div>
-    </details>
+    <section class="risk-report" id="plan-{{ r.id }}">
+      <h3>{{ r.id }} — {{ r.title }} <span class="pill b-{{ r.severity }}">{{ r.severity }} {{ r.score }}</span></h3>
+      {% if plan %}
+        <p class="rr-meta">Strategy: <b>{{ plan.strategy }}</b> <span>·</span> Owner: <span class="owner">{{ plan.owner }}</span></p>
+        <p class="rr-just">{{ plan.strategy_justification }}</p>
+        <ol class="actions">
+          {% for a in plan.actions %}<li>{{ a }}</li>{% endfor %}
+        </ol>
+        <div class="contingency">
+          <b>Contingency:</b> {{ plan.contingency }}
+        </div>
+      {% else %}
+        <p class="muted">No plan for {{ r.id }} — AI unavailable or skipped.</p>
+      {% endif %}
+    </section>
   {% endfor %}
 </div>
 
