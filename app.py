@@ -18,6 +18,9 @@ from velocity import compute_trends, list_snapshots, save_snapshot, trend_chart
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-only-change-me")
+# pick up template edits without a server restart
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
 
 # last successful analysis for /export and /snapshot (single-user standalone tool)
 LAST = {"analysis": None, "ai": None, "raw_risks": None, "currency": "$"}
