@@ -191,7 +191,7 @@ tr[class^=sev-] td:first-child { box-shadow: inset 3px 0 0 var(--c) }
 .ex-btns { display: inline-flex; gap: var(--s2) }
 .linklike { background: none; border: none; font: 600 13px var(--body); color: var(--accent); cursor: pointer }
 .linklike:hover { text-decoration: underline; text-underline-offset: 3px }
-#exPre { font: 12px/1.6 var(--mono); background: #F8FAFD; border: 1px solid var(--line); border-radius: 8px; padding: var(--s3); padding-bottom: 12px; max-height: 260px; overflow: auto; overflow-x: auto; margin-top: var(--s3); white-space: pre; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent }
+#exPre { font: 12px/1.6 var(--mono); background: #F8FAFD; border: 1px solid var(--line); border-radius: 8px; padding: var(--s3) var(--s5) var(--s3) var(--s3); max-height: 260px; overflow-y: auto; overflow-x: hidden; margin-top: var(--s3); white-space: pre-wrap; overflow-wrap: break-word; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent }
 #manualList { margin-top: var(--s4); display: grid; gap: var(--s2) }
 .rcard { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); background: #F8FAFD; border: 1px solid var(--line); border-radius: 8px; padding: 10px var(--s4); font-size: 14px }
 .rcard small { display: block; color: var(--muted); font-size: 12px }
