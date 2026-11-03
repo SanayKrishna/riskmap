@@ -1,131 +1,42 @@
-"""Plotly 5x5 risk heat map — no AI, no Flask."""
+"""5x5 risk heat map as a plain HTML grid — no AI, no Flask, no charting library."""
 
-from plotly.offline import plot
-import plotly.graph_objects as go
+from collections import defaultdict
+from html import escape
+
+from risk_engine import score_to_severity
 
 IMPACT_LABELS = ["Negligible", "Minor", "Moderate", "Major", "Catastrophic"]
-PROB_LABELS = ["Rare", "Unlikely", "Possible", "Likely", "Almost Certain"]
-
-# smooth green -> yellow -> orange -> red
-CELL_COLORSCALE = [
-    [0.0, "#F0FDF4"],
-    [0.20, "#16A34A"],
-    [0.28, "#FEF3C7"],
-    [0.48, "#D97706"],
-    [0.55, "#FFEDD5"],
-    [0.72, "#EA580C"],
-    [0.80, "#FEE2E2"],
-    [1.0, "#DC2626"],
-]
-
-
-def _jitter_offsets(count):
-    """Small offsets so markers sharing a cell don't fully overlap."""
-    if count == 1:
-        return [(0.0, 0.0)]
-    step = 0.16
-    # spread along x, alternate y slightly
-    return [
-        ((k - (count - 1) / 2) * step, 0.12 if k % 2 else -0.12)
-        for k in range(count)
-    ]
+PROB_LABELS = ["Rare", "Unlikely", "Possible", "Likely", "Almost certain"]
+BANDS = [("Critical", "20–25"), ("High", "13–19"), ("Medium", "7–12"), ("Low", "1–6")]
 
 
 def generate_heatmap(analysis):
-    """Build an interactive 5x5 heat map, return inline Plotly HTML div."""
-    project_name = analysis.get("project_name", "Project")
+    """Return the heat map as an inline HTML fragment (responsive CSS grid)."""
     risks = analysis.get("risks", [])
-
-    # background cell scores: z[row=prob][col=impact] = p * i
-    z = [[p * i for i in range(1, 6)] for p in range(1, 6)]
-
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Heatmap(
-            z=z,
-            x=[1, 2, 3, 4, 5],
-            y=[1, 2, 3, 4, 5],
-            colorscale=CELL_COLORSCALE,
-            zmin=1,
-            zmax=25,
-            showscale=False,
-            hoverinfo="skip",
-        )
-    )
-
-    # group risk ids by cell for offsetting
-    from collections import defaultdict
     cells = defaultdict(list)
     for r in risks:
         cells[(r["probability"], r["impact"])].append(r)
 
-    for (prob, imp), cell_risks in sorted(cells.items()):
-        cell_risks = sorted(cell_risks, key=lambda r: str(r["id"]))
-        offsets = _jitter_offsets(len(cell_risks))
-        for r, (dx, dy) in zip(cell_risks, offsets):
-            fig.add_trace(
-                go.Scatter(
-                    x=[r["impact"] + dx],
-                    y=[r["probability"] + dy],
-                    mode="markers+text",
-                    marker=dict(
-                        color=r["color"],
-                        size=26,
-                        line=dict(color="white", width=2),
-                    ),
-                    text=[r["id"]],
-                    textposition="middle center",
-                    textfont=dict(color="white", size=11),
-                    name=f"{r['id']} ({r['severity']})",
-                    hovertemplate=(
-                        f"<b>{r['id']} · {r['title']}</b><br>"
-                        f"Score {r['score']} — {r['severity']}<br>"
-                        f"Probability {r['probability']} · Impact {r['impact']}<br>"
-                        f"<i>{r['description']}</i><extra></extra>"
-                    ),
-                    showlegend=False,
-                )
+    out = ['<div class="hm" role="img" aria-label="Risk heat map: probability against impact">',
+           '<div class="hm-grid">']
+    for p in range(5, 0, -1):  # likeliest at the top
+        out.append(f'<div class="hm-ylab"><b>{p}</b><span>{PROB_LABELS[p - 1]}</span></div>')
+        for i in range(1, 6):
+            band, _ = score_to_severity(p * i)
+            chips = "".join(
+                f'<span class="hm-chip sev-{escape(str(r["severity"]))}" tabindex="0" '
+                f'title="{escape(str(r["id"]))} — {escape(str(r["title"]))}&#10;'
+                f'Score {r["score"]} ({escape(str(r["severity"]))}), P{p} × I{i}">{escape(str(r["id"]))}</span>'
+                for r in sorted(cells.get((p, i), []), key=lambda r: str(r["id"]))
             )
-
-    # legend bands (dummy traces)
-    for label, color in [
-        ("Critical (20–25)", "#DC2626"),
-        ("High (13–19)", "#EA580C"),
-        ("Medium (7–12)", "#D97706"),
-        ("Low (1–6)", "#16A34A"),
-    ]:
-        fig.add_trace(
-            go.Scatter(
-                x=[None], y=[None],
-                mode="markers",
-                marker=dict(color=color, size=12, symbol="square"),
-                name=label,
-            )
-        )
-
-    fig.update_layout(
-        title=f"{project_name} — Risk Heat Map",
-        xaxis=dict(
-            title="Impact · 1 Negligible → 5 Catastrophic",
-            tickvals=[1, 2, 3, 4, 5],
-            ticktext=["1", "2", "3", "4", "5"],
-            range=[0.5, 5.5],
-            title_standoff=12,
-        ),
-        yaxis=dict(
-            title="Probability",
-            tickvals=[1, 2, 3, 4, 5],
-            ticktext=[f"{p} — {lbl}" for p, lbl in enumerate(PROB_LABELS, 1)],
-            range=[0.5, 5.5],
-        ),
-        margin=dict(l=60, r=20, t=60, b=150),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        hovermode="closest",
-        hoverlabel=dict(bgcolor="white", bordercolor="#D4D1C8",
-                        font=dict(family="Inter, sans-serif", size=13, color="#141414")),
-        legend=dict(orientation="h", y=-0.38, x=0),
-    )
-
-    return plot(fig, output_type="div", include_plotlyjs=False)
+            out.append(f'<div class="hm-cell band-{band}"><i>{p * i}</i>{chips}</div>')
+    out.append('<div class="hm-corner"></div>')
+    for i in range(1, 6):
+        out.append(f'<div class="hm-xlab"><b>{i}</b><span>{IMPACT_LABELS[i - 1]}</span></div>')
+    out.append("</div>")
+    out.append('<div class="hm-axis"><span>↑ Probability</span><span>Impact →</span></div>')
+    out.append('<ul class="hm-legend">')
+    for band, rng in BANDS:
+        out.append(f'<li><i class="band-{band}"></i>{band} <span>{rng}</span></li>')
+    out.append("</ul></div>")
+    return "".join(out)

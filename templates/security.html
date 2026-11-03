@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card, error_box %}
+
+{% block title %}Security log — Risk Register{% endblock %}
+{% block plotly %}<script src="{{ url_for('plotly_js') }}"></script>{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="crumb"><span>Audit</span><span>kept for 30 days, times in UTC</span></div>
+    <h1>Security log</h1>
+    <p class="sub">Uploads, rate limits, form checks and snapshot integrity, in one place.</p>
+  </div>
+  <div class="head-actions"><a class="btn btn-sm" href="/security">Refresh</a></div>
+</div>
+
+{{ error_box(error) }}
+
+<div class="stat-strip">
+  <div class="stat"><span>Total events</span><b>{{ total }}</b><small>all time</small></div>
+  <div class="stat {{ 'crit' if critical_24h }}"><span>Critical</span><b>{{ critical_24h }}</b><small>last 24 hours</small></div>
+  <div class="stat {{ 'high' if warn_24h }}"><span>Warnings</span><b>{{ warn_24h }}</b><small>last 24 hours</small></div>
+  <div class="stat"><span>Events today</span><b>{{ today }}</b><small>since midnight</small></div>
+</div>
+
+<div class="row r-7-5" style="margin-top:24px">
+  {% call card("Events per hour", "", "last 24 hours, by severity") %}
+    {% if timeline_div %}<div class="plotly-div">{{ timeline_div|safe }}</div>
+    {% else %}<p class="sec-empty" style="padding:0">No events in the last 24 hours.</p>{% endif %}
+  {% endcall %}
+
+  {% call card("Events by type", "", "all time") %}
+    {% if types_div %}<div class="plotly-div">{{ types_div|safe }}</div>
+    {% else %}<p class="sec-empty" style="padding:0">Nothing recorded yet.</p>{% endif %}
+  {% endcall %}
+</div>
+
+{% call card("Recent events", "", "newest first, up to 100", True) %}
+  {% if events %}
+  <div class="filters" role="group" aria-label="Filter by severity">
+    <button type="button" class="on" data-sev="">All</button>
+    <button type="button" data-sev="CRITICAL">Critical</button>
+    <button type="button" data-sev="WARN">Warnings</button>
+    <button type="button" data-sev="INFO">Info</button>
+  </div>
+  <div class="table-scroll sec-table-scroll">
+    <table class="sec-table">
+      <thead>
+        <tr><th>Time</th><th>Type</th><th>Severity</th><th>IP</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        {% set sev = {'CRITICAL': 'Critical', 'WARN': 'High', 'INFO': 'Low'}.get(e.severity, 'Low') %}
+        <tr data-sev="{{ e.severity }}">
+          <td class="sec-time">{{ e.timestamp[:19]|replace('T', ' ') }}</td>
+          <td class="sec-type">{{ e.event_type }}</td>
+          <td><span class="pill b-{{ sev }}">{{ e.severity|title }}</span></td>
+          <td class="sec-ip">{{ e.source_ip }}</td>
+          <td class="sec-detail">{{ e.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="sec-empty">No events recorded.</p>{% endif %}
+{% endcall %}
+
+{% endblock %}

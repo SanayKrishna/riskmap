@@ -5,3 +5,7 @@ python-dotenv
 google-genai
 networkx
 pytest
+
+flask-wtf
+flask-limiter
+flask-talisman

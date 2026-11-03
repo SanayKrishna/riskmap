@@ -1,207 +1,190 @@
 {% extends "base.html" %}
+{% from "_macros.html" import card, sev_pill %}
 
-{% block title %}{{ analysis.project_name }} — Results{% endblock %}
-
-{% block topbar_right %}
-<a class="btn btn-sm" href="/">
-  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M3 8h10"/></svg>
-  New analysis
-</a>
-<a class="btn btn-sm btn-primary" href="/export">
-  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>
-  Export CSV
-</a>
-{% endblock %}
+{% block title %}{{ analysis.project_name }} — Report{% endblock %}
 
 {% block content %}
 
-<!-- ════════════════════════════════════════
-     SECTION NAV + VERDICT HERO
-     ════════════════════════════════════════ -->
-<nav class="pagenav">
-  <a href="#summary">Summary</a>
-  <a href="#heatmap">Heat map</a>
-  <a href="#register">Register</a>
-  {% if cascade %}<a href="#depmap">Map</a>{% endif %}
-  <a href="#plan">Plan</a>
-</nav>
-
-<header class="verdict" id="summary">
-  <div class="verdict-main">
-    <div class="eyebrow">Risk report · {{ analysis.date }}{% if analysis.project_manager %} · {{ analysis.project_manager }}{% endif %}</div>
-    <h1>{{ analysis.project_name }}</h1>
-    {% set top = analysis.risks[0] %}
-    <p class="verdict-line">
-      {% if analysis.critical_count %}<b>{{ analysis.critical_count }} Critical</b> risk{{ "s" if analysis.critical_count != 1 }} on the books — start with {{ top.id }}: {{ top.title }}.
-      {% elif analysis.high_count %}No Critical risks. <b>{{ analysis.high_count }} High</b> lead{{ "s" if analysis.high_count != 1 }} — start with {{ top.id }}: {{ top.title }}.
-      {% else %}Nothing above Medium. Highest is {{ top.id }} ({{ top.score }}).{% endif %}
-    </p>
-    <div class="verdict-actions">
-      <a class="btn btn-primary btn-sm" href="/export">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>
-        Export CSV</a>
-      <form method="post" action="/snapshot" class="snapinline">
-        <input type="hidden" name="project" value="{{ analysis.project_name }}">
-        <input type="text" name="label" placeholder="Week 1" required>
-        <button class="btn btn-sm" type="submit">Snapshot</button>
-      </form>
-      <a class="quiet" href="/history?project={{ analysis.project_name|urlencode }}">History →</a>
-      <a class="quiet" href="/">＋ New</a>
+<div class="page-head" id="summary">
+  <div>
+    <div class="crumb">
+      <span>Risk report</span>
+      {% if analysis.date %}<span>{{ analysis.date }}</span>{% endif %}
+      {% if analysis.project_manager %}<span>{{ analysis.project_manager }}</span>{% endif %}
     </div>
+    <h1>{{ analysis.project_name }}</h1>
   </div>
-  <aside class="verdict-side">
-    <span class="badge big b-{{ analysis.overall_level }}">{{ analysis.overall_level }}</span>
-    <dl class="metrics">
-      <div><dt>Total risks</dt><dd>{{ analysis.total_count }}</dd></div>
-      <div><dt>Critical</dt><dd>{{ analysis.critical_count }}</dd></div>
-      <div><dt>High</dt><dd>{{ analysis.high_count }}</dd></div>
-      <div><dt>Medium + Low</dt><dd>{{ analysis.medium_count + analysis.low_count }}</dd></div>
-      {% if analysis.exposure_count %}<div><dt>Exposure</dt><dd>{{ analysis.currency }}{{ "{:,.0f}".format(analysis.total_exposure) }}</dd></div>{% endif %}
-    </dl>
-  </aside>
-</header>
-
-<!-- ════════════════════════════════════════
-     HEAT MAP
-     ════════════════════════════════════════ -->
-<div class="card" id="heatmap">
-  <h2>Heat map</h2>
-  <div class="plotly-div">{{ heatmap_div|safe }}</div>
+  <div class="head-actions">
+    <a class="quiet" href="/history?project={{ analysis.project_name|urlencode }}">History</a>
+    <a class="quiet" href="/">New analysis</a>
+    <a class="btn btn-sm" href="/export">Export CSV</a>
+  </div>
 </div>
 
-<!-- ════════════════════════════════════════
-     RISK REGISTER — clean table, no row bgs
-     ════════════════════════════════════════ -->
-<div class="card" id="register">
-  <h2>Risk register</h2>
+{% set top = analysis.risks[0] %}
+<div class="verdict">
+  <p>
+    {% if analysis.critical_count %}<b>{{ analysis.critical_count }} Critical</b> risk{{ "s" if analysis.critical_count != 1 }}. Start with {{ top.id }}: {{ top.title }}.
+    {% elif analysis.high_count %}No Critical risks. <b>{{ analysis.high_count }} High</b>. Start with {{ top.id }}: {{ top.title }}.
+    {% else %}Nothing above Medium. The highest is {{ top.id }}, score {{ top.score }}.{% endif %}
+  </p>
+  <form method="post" action="/snapshot" class="snapinline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="project" value="{{ analysis.project_name }}">
+    <input type="text" name="label" placeholder="Snapshot label" required aria-label="Snapshot label">
+    <button class="btn btn-sm btn-primary" type="submit">Save snapshot</button>
+  </form>
+</div>
+
+<div class="stat-strip" style="margin-top:24px">
+  <div class="stat"><span>Risks</span><b>{{ analysis.total_count }}</b><small>in the register</small></div>
+  <div class="stat crit"><span>Critical</span><b>{{ analysis.critical_count }}</b><small>score 20 to 25</small></div>
+  <div class="stat high"><span>High</span><b>{{ analysis.high_count }}</b><small>score 13 to 19</small></div>
+  <div class="stat"><span>Medium and low</span><b>{{ analysis.medium_count + analysis.low_count }}</b><small>score 1 to 12</small></div>
+  {% if analysis.exposure_count %}<div class="stat accent"><span>Expected exposure</span><b>{{ analysis.currency }}{{ "{:,.0f}".format(analysis.total_exposure) }}</b><small>EMV across {{ analysis.exposure_count }} risk{{ "s" if analysis.exposure_count != 1 }}</small></div>{% endif %}
+</div>
+
+<nav class="pagenav" aria-label="Report sections">
+  <a href="#heatmap" class="on">Heat map</a>
+  <a href="#register">Register</a>
+  {% if cascade %}<a href="#depmap">Dependencies</a>{% endif %}
+  <a href="#plan">Response plan</a>
+</nav>
+
+<div class="row r-7-5">
+  {% call card("Heat map", "heatmap", "probability against impact") %}
+    {{ heatmap_div|safe }}
+  {% endcall %}
+
+  {% call card("Where to look first", "", "overall " ~ analysis.overall_level|lower) %}
+    <h3 class="side-h">By severity</h3>
+    {% set total = analysis.total_count or 1 %}
+    <div class="dist">
+      {% for sev, n in [("Critical", analysis.critical_count), ("High", analysis.high_count), ("Medium", analysis.medium_count), ("Low", analysis.low_count)] %}
+      <div class="dist-row sev-{{ sev }}"><span>{{ sev }}</span><div class="bar"><i style="width:{{ (n / total * 100)|round|int }}%"></i></div><b>{{ n }}</b></div>
+      {% endfor %}
+    </div>
+    <h3 class="side-h">Top risks</h3>
+    <ol class="top3">
+      {% for r in analysis.risks[:3] %}
+      <li class="sev-{{ r.severity }}"><span class="rank">{{ loop.index }}</span><div><b>{{ r.id }} · {{ r.title }}</b><small>{{ r.category }} · P{{ r.probability }} × I{{ r.impact }}</small></div><span class="score">{{ r.score }}</span></li>
+      {% endfor %}
+    </ol>
+  {% endcall %}
+</div>
+
+{% if cascade %}
+{% call card("Dependency map", "depmap", "arrows point to what a risk triggers · hover a node to follow its chain", True) %}
+  {{ network_div|safe }}
+  <div class="table-scroll" style="max-height:340px">
+    <table>
+      <thead><tr><th>ID</th><th>Cascade risk</th><th>Sets off</th><th class="num">Blast</th><th>Worst downstream</th></tr></thead>
+      <tbody>
+        {% for c in cascade %}
+        <tr>
+          <td><span class="mono">{{ c.id }}</span></td>
+          <td>{{ c.title }}</td>
+          <td class="mono">{{ c.downstream|join(', ') }}</td>
+          <td class="num">{{ c.blast }}</td>
+          <td>{{ sev_pill(c.max_downstream_severity) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+{% endif %}
+
+{% call card("Risk register", "register", "click a column to sort", True) %}
   <div class="table-scroll">
     <table>
       <thead>
         <tr>
-          <th>#</th>
-          <th>ID</th>
-          <th>Risk</th>
-          <th>Category</th>
-          <th style="text-align:center">P</th>
-          <th style="text-align:center">I</th>
-          <th style="text-align:center">Score</th>
-          <th>Severity</th>
-          {% if analysis.exposure_count %}<th>EMV</th>{% endif %}
+          <th class="num" data-sort="num">#</th>
+          <th data-sort="text">ID</th>
+          <th data-sort="text">Risk</th>
+          <th data-sort="text">Category</th>
+          <th class="num" data-sort="num">P</th>
+          <th class="num" data-sort="num">I</th>
+          <th class="num" data-sort="num">Score</th>
+          <th data-sort="text">Severity</th>
+          {% if analysis.exposure_count %}<th class="num" data-sort="num">EMV</th>{% endif %}
         </tr>
       </thead>
       <tbody>
         {% for r in analysis.risks %}
         <tr class="sev-{{ r.severity }}">
-          <td style="color:var(--muted-2);font-size:12px;font-variant-numeric:tabular-nums">{{ r.priority_rank }}</td>
-          <td><b style="font-size:13px">{{ r.id }}</b></td>
+          <td class="num muted">{{ r.priority_rank }}</td>
+          <td><span class="mono">{{ r.id }}</span></td>
           <td>
-            <span style="font-weight:500;color:var(--ink)">{{ r.title }}</span>
-            {% if r.triggers %}<br><small class="muted">→ {{ r.triggers|join(', ') }}</small>{% endif %}
-            {% if r.description %}<br><small class="muted">{{ r.description }}</small>{% endif %}
+            <b>{{ r.title }}</b>
+            {% if r.triggers %}<small>Triggers {{ r.triggers|join(', ') }}</small>{% endif %}
+            {% if r.description %}<small>{{ r.description }}</small>{% endif %}
           </td>
-          <td style="color:var(--muted);font-size:13px;white-space:nowrap">{{ r.category }}</td>
-          <td style="text-align:center;color:var(--ink-2)">{{ r.probability }}</td>
-          <td style="text-align:center;color:var(--ink-2)">{{ r.impact }}</td>
-          <td style="text-align:center"><b>{{ r.score }}</b></td>
-          <td><span class="pill b-{{ r.severity }}">{{ r.severity }}</span></td>
+          <td class="muted">{{ r.category }}</td>
+          <td class="num">{{ r.probability }}</td>
+          <td class="num">{{ r.impact }}</td>
+          <td class="num"><b>{{ r.score }}</b></td>
+          <td>{{ sev_pill(r.severity) }}</td>
           {% if analysis.exposure_count %}
-          <td style="font-size:13px;font-variant-numeric:tabular-nums">
-            {% if r.emv is not none %}{{ analysis.currency }}{{ "{:,.0f}".format(r.emv) }}{% else %}<span class="muted">—</span>{% endif %}
-          </td>
+          <td class="num">{% if r.emv is not none %}{{ analysis.currency }}{{ "{:,.0f}".format(r.emv) }}{% else %}<span class="muted">—</span>{% endif %}</td>
           {% endif %}
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</div>
+{% endcall %}
 
-<!-- ════════════════════════════════════════
-     CASCADE / DEPENDENCY (conditional)
-     ════════════════════════════════════════ -->
-{% if cascade %}
-<div class="card" id="depmap">
-  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
-    <h2 style="margin:0">Dependency map</h2>
-    <span style="font-size:13px;color:var(--muted)">arrow: triggers · {{ cascade|length }} chain{{ "s" if cascade|length != 1 }}</span>
-  </div>
-  <div class="plotly-div">{{ network_div|safe }}</div>
-  {% if unlinked %}
-  <p style="font-size:13px;color:var(--muted);margin:10px 0 0">{{ unlinked|map(attribute='id')|join(', ') }} {{ "has" if unlinked|length == 1 else "have" }} no links and {{ "floats" if unlinked|length == 1 else "float" }} free on the map.</p>
-  {% endif %}
-</div>
-
-<div class="card">
-  <h2>Cascade risks</h2>
-  <p style="color:var(--muted);font-size:13.5px;margin-bottom:16px">Risks that, if they occur, set off others</p>
-  <div class="table-scroll" style="max-height:300px">
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Risk</th>
-          <th>Sets off</th>
-          <th>Worst downstream</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in cascade %}
-        <tr>
-          <td><b>{{ c.id }}</b></td>
-          <td>{{ c.title }}</td>
-          <td>{{ c.downstream|join(', ') }} <span class="muted" style="font-size:12px">({{ c.blast }})</span></td>
-          <td><span class="pill b-{{ c.max_downstream_severity }}">{{ c.max_downstream_severity }}</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
-
-<!-- ════════════════════════════════════════
-     AI RESPONSE PLAN — report flow, no cards
-     ════════════════════════════════════════ -->
-<div class="ai-section" id="plan">
-  <div class="ai-section-header">
-    <h2>Response plan</h2>
-    <span style="font-size:13px;color:var(--muted)">High &amp; Critical only · via Gemini</span>
-  </div>
-
+{% call card("Response plan", "plan", "High and Critical only, via Gemini", True) %}
   {% if not ai.available %}
-  <div class="callout" style="background:var(--high-bg);border-color:var(--high-line);margin-top:12px">
+  <div class="callout" style="margin:20px">
+    <div>
     {% if ai.reason == 'no-key' %}
-    <b>AI plan unavailable — no API key set.</b> Add <code>GEMINI_API_KEY</code> to your <code>.env</code> and re-run the analysis. The scored register above is unaffected.
+    <b>AI plan unavailable: no API key set.</b> Add <code>GEMINI_API_KEY</code> to your <code>.env</code> and re-run the analysis. The scored register above is unaffected.
+    {% elif ai.reason == 'quota' %}
+    <b>AI plan unavailable: the Gemini quota is used up.</b> The register above is complete. Try again later, or use a key with more quota.
+    {% elif ai.reason == 'timeout' %}
+    <b>AI plan unavailable: Gemini took too long to answer.</b> The register above is complete. Re-run the analysis to try again.
     {% elif ai.reason == 'overloaded' %}
-    <b>AI plan unavailable — Gemini is overloaded right now.</b> Your register above is complete; re-run the analysis in a few minutes to get the response plan.
+    <b>AI plan unavailable: Gemini is overloaded right now.</b> The register above is complete. Re-run the analysis in a few minutes to get the response plan.
     {% else %}
     <b>AI plan unavailable.</b> <span class="muted">{{ ai.error }}</span>
     {% endif %}
+    </div>
   </div>
   {% endif %}
 
-  <nav class="risk-index">
-    {% for r in analysis.risks if r.severity in ('High','Critical') %}<a href="#plan-{{ r.id }}">{{ r.id }}</a>{% if not loop.last %}<span>·</span>{% endif %}{% endfor %}
+  <nav class="risk-index" aria-label="Jump to a risk">
+    {% for r in analysis.risks if r.severity in ('High','Critical') %}<a class="sev-{{ r.severity }}" href="#plan-{{ r.id }}">{{ r.id }}</a>{% endfor %}
   </nav>
 
   {% for r in analysis.risks if r.severity in ('High','Critical') %}
     {% set plan = ai.plans.get(r.id) if ai.plans else None %}
-    <section class="risk-report" id="plan-{{ r.id }}">
-      <h3>{{ r.id }} — {{ r.title }} <span class="pill b-{{ r.severity }}">{{ r.severity }} {{ r.score }}</span></h3>
+    <article class="risk-report" id="plan-{{ r.id }}">
+      <div>
+        <h3>{{ r.id }} · {{ r.title }}</h3>
+        {{ sev_pill(r.severity, r.severity ~ " · " ~ r.score) }}
+        {% if plan %}
+        <dl>
+          <dt>Strategy</dt><dd>{{ plan.strategy }}</dd>
+          <dt>Owner</dt><dd>{{ plan.owner }}</dd>
+        </dl>
+        {% endif %}
+      </div>
+      <div>
       {% if plan %}
-        <p class="rr-meta">Strategy: <b>{{ plan.strategy }}</b> <span>·</span> Owner: <span class="owner">{{ plan.owner }}</span></p>
         <p class="rr-just">{{ plan.strategy_justification }}</p>
         <ol class="actions">
           {% for a in plan.actions %}<li>{{ a }}</li>{% endfor %}
         </ol>
-        <div class="contingency">
-          <b>Contingency:</b> {{ plan.contingency }}
-        </div>
+        <div class="contingency"><b>If it happens anyway.</b> {{ plan.contingency }}</div>
       {% else %}
-        <p class="muted">No plan for {{ r.id }} — AI unavailable or skipped.</p>
+        <p class="muted">No plan for {{ r.id }}. AI unavailable or skipped.</p>
       {% endif %}
-    </section>
+      </div>
+    </article>
   {% endfor %}
-</div>
+{% endcall %}
 
 {% endblock %}

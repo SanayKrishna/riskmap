@@ -54,4 +54,4 @@ def test_closed_risk(iso):
 def test_chart_div(iso):
     save_snapshot("Proj", "Week 1", "2026-09-15", _risks())
     div = trend_chart("Proj")
-    assert "R1" in div and "Risk Velocity" in div
+    assert "R1" in div and "Plotly" in div

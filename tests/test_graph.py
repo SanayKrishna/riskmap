@@ -53,29 +53,39 @@ def test_chains_text_and_cycles():
     assert cascade_ranking(cyc)  # terminates despite the cycle
 
 
-def test_network_chart_div():
+def test_network_chart_svg():
     from graph import network_chart
     div = network_chart({"project_name": "P", "risks": _risks()})
-    assert "Dependency Map" in div and "R1" in div
+    assert "<svg" in div and "R1" in div and "plotly" not in div.lower()
     assert network_chart({"project_name": "P", "risks": []}) == ""
 
 
-def test_network_chart_arrows_and_isolation():
-    from unittest.mock import patch
-    import plotly.offline
+def test_network_chart_arrows_isolation_and_escaping():
     from graph import isolated_nodes, network_chart
     assert [r["id"] for r in isolated_nodes(_risks())] == []
     lone = _risks() + [
-        {"id": "R9", "title": "Lone", "category": "Cost",
+        {"id": "R9", "title": "<b>Lone</b>", "category": "Cost",
          "probability": 1, "impact": 1, "score": 1, "severity": "Low",
          "color": "#16A34A", "description": "d", "triggers": []},
     ]
     assert [r["id"] for r in isolated_nodes(lone)] == ["R9"]
-    captured = {}
-    with patch.object(plotly.offline, "plot", lambda fig, **kw: captured.setdefault("fig", fig) or ""):
-        network_chart({"project_name": "P", "risks": _risks()})
-    fig = captured["fig"]
-    from graph import build_graph
-    n_edges = len(list(build_graph(_risks()).edges))
-    assert len(fig.layout.annotations) == n_edges == 2  # one arrow per edge
-    assert all(a.showarrow for a in fig.layout.annotations)
+    svg = network_chart({"project_name": "P", "risks": lone})
+    assert svg.count('class="dep-edge"') == 2          # one arrow per edge
+    assert svg.count('marker-end="url(#dep-arrow)"') == 2
+    assert "NOT LINKED" in svg and "R9" in svg
+    assert "<b>Lone" not in svg and "&lt;b&gt;Lone" in svg  # user text is escaped
+
+
+def test_network_chart_cycle_does_not_crash():
+    from graph import network_chart
+    cyc = _risks()
+    cyc[2]["triggers"] = ["R1"]
+    svg = network_chart({"project_name": "P", "risks": cyc})
+    assert svg.count('class="dep-edge"') == 3
+
+
+def test_heatmap_grid():
+    from heatmap import generate_heatmap
+    html = generate_heatmap({"risks": _risks()})
+    assert html.count('class="hm-chip') == 3 and "hm-grid" in html
+    assert html.count("hm-cell") == 25
