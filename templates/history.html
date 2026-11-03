@@ -1,70 +1,136 @@
 {% extends "base.html" %}
-{% block title %}{{ project }} — Risk History{% endblock %}
+{% from "_macros.html" import card, sev_pill, integrity_tag, error_box %}
+
+{% block title %}{{ data.project_name }} — History{% endblock %}
+{% block plotly %}<script src="{{ url_for('plotly_js') }}"></script>{% endblock %}
+
 {% block content %}
-<div class="card">
-  <div class="report-head">
-    <div>
-      <div class="eyebrow">Risk velocity</div>
-      <h1>{{ project }}</h1>
-      <p class="meta">{{ data.snapshots|length }} snapshot{{ "s" if data.snapshots|length != 1 }} logged</p>
-    </div>
-    <a class="btn" href="/">＋ New analysis</a>
-  </div>
-  {% if error %}<div class="error" style="margin-top:14px"><span>{{ error }}</span></div>{% endif %}
-</div>
 
-{% if data.snapshots %}
-<div class="card">
-  <h2>Snapshots</h2>
-  <div class="table-scroll" style="max-height:240px">
-  <table>
-    <tr><th>Label</th><th>Date</th><th>Risks</th></tr>
-    {% for s in data.snapshots %}
-    <tr><td><b>{{ s.label }}</b></td><td>{{ s.date }}</td><td>{{ s.risks|length }}</td></tr>
-    {% endfor %}
-  </table>
+<div class="page-head">
+  <div>
+    <div class="crumb"><span>History</span><span>risk velocity</span></div>
+    <h1>{{ data.project_name }}</h1>
+  </div>
+  <div class="head-actions">
+    <a class="quiet" href="/">New analysis</a>
+    <a class="btn btn-sm" href="/results?project={{ data.project_name|urlencode }}">Latest report</a>
   </div>
 </div>
 
-<div class="card">
-  <h2>Score Trends</h2>
-  <div class="plotly-div">{{ trend_div|safe }}</div>
+{{ error_box(error) }}
+
+{% set ints = data.snapshots|map(attribute='integrity')|list %}
+{% set tampered = ints|select('equalto', 'tampered')|list|length %}
+<div class="stat-strip">
+  <div class="stat"><span>Snapshots</span><b>{{ data.snapshots|length }}</b><small>saved for this project</small></div>
+  <div class="stat"><span>Range</span><b class="sm">{% if data.snapshots %}{{ data.snapshots[0].label }} → {{ data.snapshots[-1].label }}{% else %}—{% endif %}</b></div>
+  <div class="stat {{ 'crit' if tampered }}"><span>Tampered</span><b>{{ tampered }}</b><small>{{ "snapshots failed the signature check" if tampered else "all signatures check out" }}</small></div>
 </div>
 
-<div class="card">
-  <h2>What Changed</h2>
-  {% set sc={'Worsened':'b-Critical','Improved':'b-Low','Stable':'b-Accept','New':'b-Transfer','Closed':'b-Accept'} %}
-  <div class="table-scroll" style="max-height:360px">
-  <table>
-    <tr><th>ID</th><th>Title</th><th>First → Last</th><th>Δ</th><th>Status</th></tr>
-    {% for t in data.trends %}
-    <tr>
-      <td><b>{{ t.id }}</b></td><td>{{ t.title }}</td>
-      <td>{{ t.first_score }} → {{ t.last_score }}</td>
-      <td><b>{{ "%+d"|format(t.delta) }}</b></td>
-      <td><span class="pill {{ sc[t.status] }}">{{ t.status }}</span></td>
-    </tr>
-    {% endfor %}
-  </table>
+{% if not data.snapshots %}
+<section class="card" style="margin-top:24px">
+  <div class="empty">
+    <h2>No snapshots yet</h2>
+    <p>Run an analysis, then save a snapshot. Each one is signed when saved, so you can tell later whether it was edited.</p>
+    <a class="btn btn-primary" href="/">Analyze a project</a>
   </div>
-</div>
+</section>
 {% else %}
-<div class="card"><p class="muted">No snapshots yet — save one below to start tracking this register over time.</p></div>
+
+{% call card("Score trend", "", "risk score at each snapshot") %}
+  <div class="plotly-div">{{ trend_div|safe }}</div>
+{% endcall %}
+
+{% call card("Risk velocity", "", "score change from first to latest snapshot", True) %}
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="text">ID</th>
+          <th data-sort="text">Title</th>
+          <th class="num" data-sort="num">First</th>
+          <th class="num" data-sort="num">Latest</th>
+          <th class="num" data-sort="num">Change</th>
+          <th data-sort="text">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in data.trends %}
+        <tr>
+          <td><span class="mono">{{ t.id }}</span></td>
+          <td>{{ t.title }}</td>
+          <td class="num">{{ t.first_score if t.first_score is not none else "—" }}</td>
+          <td class="num"><b>{{ t.last_score if t.last_score is not none else "—" }}</b></td>
+          <td class="num">
+            {% if t.delta is not none %}
+              {% if t.delta > 0 %}<span class="delta-up">+{{ t.delta }}</span>
+              {% elif t.delta < 0 %}<span class="delta-down">{{ t.delta }}</span>
+              {% else %}<span class="muted">0</span>{% endif %}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if t.status == 'Worsened' %}<span class="pill b-Critical">Worsened</span>
+            {% elif t.status == 'Improved' %}<span class="pill b-Low">Improved</span>
+            {% elif t.status == 'New' %}<span class="pill b-High">New</span>
+            {% else %}<span class="pill neutral">{{ t.status }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+
+{% call card("Snapshots", "", "signed when saved, checked when loaded", True) %}
+  <div class="table-scroll" style="max-height:340px">
+    <table>
+      <thead>
+        <tr>
+          <th class="num">#</th><th>Label</th><th>Date</th>
+          <th class="num">Risks</th><th class="num">Critical</th><th class="num">High</th><th>Overall</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in data.snapshots %}
+        <tr>
+          <td class="num muted">{{ loop.index }}</td>
+          <td><b>{{ s.label }}</b>{{ integrity_tag(s.integrity) }}</td>
+          <td class="muted mono">{{ s.date }}</td>
+          <td class="num">{{ s.total_count }}</td>
+          <td class="num"><b {% if s.critical_count %}style="color:var(--crit)"{% endif %}>{{ s.critical_count }}</b></td>
+          <td class="num"><b {% if s.high_count %}style="color:var(--high)"{% endif %}>{{ s.high_count }}</b></td>
+          <td>{{ sev_pill(s.overall_level) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+
 {% endif %}
 
-<div class="card">
-  <h2>Log a Time Point</h2>
-  <form method="post" action="/snapshot" enctype="multipart/form-data">
-    <input type="hidden" name="project" value="{{ project }}">
+{% call card("Add a snapshot", "", "from a risk JSON") %}
+  <form method="post" action="/snapshot" enctype="multipart/form-data" style="max-width:680px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="project" value="{{ data.project_name }}">
     <div class="grid2">
-      <div><label>Label</label><input type="text" name="label" placeholder="Week 2" required></div>
-      <div><label>Date</label><input type="date" name="date"></div>
+      <div>
+        <label for="sLabel" style="margin-top:0">Label</label>
+        <input type="text" id="sLabel" name="label" placeholder="Week 3" required>
+      </div>
+      <div>
+        <label for="sDate" style="margin-top:0">Date</label>
+        <input type="date" id="sDate" name="snapshot_date">
+      </div>
     </div>
-    <label> risks JSON for this time point <span class="muted">(same ids as before)</span></label>
-    <input type="file" name="json_file" accept=".json,application/json">
-    <textarea name="pasted_json" style="margin-top:10px" placeholder='{"risks": [...]}'></textarea>
-    <div class="btn-row"><button class="btn btn-primary" type="submit">Save snapshot</button></div>
+    <label for="sJson">Paste JSON</label>
+    <textarea id="sJson" name="pasted_json" placeholder='{"risks": [...]}'></textarea>
+    <div class="divider"><span>or upload a file</span></div>
+    <div style="margin-top:16px"><input type="file" name="json_file" accept=".json,application/json"></div>
+    <div class="btn-row" style="margin-top:24px">
+      <button type="submit" class="btn btn-primary">Save snapshot</button>
+    </div>
   </form>
-  <p class="fine">Tip: after any analysis you can also save it straight from the results page.</p>
-</div>
+{% endcall %}
+
 {% endblock %}

@@ -1,0 +1,28 @@
+{# Shared bits. Import with:  {% from "_macros.html" import card, sev_pill, integrity_tag, error_box %} #}
+
+{% macro card(title, id="", note="", flush=False) %}
+<section class="card"{% if id %} id="{{ id }}"{% endif %}>
+  <header class="card-h">
+    <h2>{{ title }}</h2>
+    {% if note %}<span>{{ note }}</span>{% endif %}
+  </header>
+  <div class="card-b{{ ' flush' if flush }}">{{ caller() }}</div>
+</section>
+{% endmacro %}
+
+{% macro sev_pill(sev, text=None) %}<span class="pill b-{{ sev }}">{{ text if text is not none else sev }}</span>{% endmacro %}
+
+{% macro integrity_tag(status) %}
+{% if status == 'verified' %}<span class="integ integ-verified" title="Signature matches the one stored when this snapshot was saved">verified</span>
+{% elif status == 'tampered' %}<span class="integ integ-tampered" title="Contents no longer match the stored signature">tampered</span>
+{% else %}<span class="integ integ-missing" title="Saved before integrity signatures existed">unverified</span>{% endif %}
+{% endmacro %}
+
+{% macro error_box(message) %}
+{% if message %}
+<div class="error" role="alert">
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.8v4M8 11v.3"/></svg>
+  <span>{{ message }}</span>
+</div>
+{% endif %}
+{% endmacro %}

@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 
 try:
     from dotenv import load_dotenv
@@ -11,6 +12,11 @@ except Exception:
 
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_log.txt")
 ALLOWED_STRATEGIES = ("Avoid", "Mitigate", "Transfer", "Accept")
+
+# The AI step is optional, so it must never hold the page hostage. Without these
+# limits one slow model call can block for minutes (seen: 127 s before a 503).
+CALL_TIMEOUT_S = float(os.getenv("GEMINI_CALL_TIMEOUT_S", "15"))   # per model call
+TOTAL_BUDGET_S = float(os.getenv("GEMINI_TOTAL_BUDGET_S", "25"))   # across all models (stops starting new ones)
 
 
 def _api_key():
@@ -88,12 +94,18 @@ def _normalize(data):
 
 def _classify_error(msg):
     low = (msg or "").lower()
+    if "429" in low or "resource_exhausted" in low or "quota" in low:
+        return "quota"
+    if "timed out" in low or "timeout" in low or "deadline" in low:
+        return "timeout"
     if "503" in low or "overload" in low or "high demand" in low or "unavailable" in low:
         return "overloaded"
     return "error"
 
 
-def generate_response_plans(project_name, high_critical_risks, models=("gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest"), chains=None):
+def generate_response_plans(project_name, high_critical_risks, models=("gemini-3.5-flash", "gemini-3.6-flash", "gemini-3-flash-preview",
+            "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.7-flash",
+            "gemini-flash-latest"), chains=None):
     """Call Gemini for High/Critical risks only. Tries each model in order.
 
     Never raises — returns a fallback dict with a machine-readable reason:
@@ -112,11 +124,22 @@ def generate_response_plans(project_name, high_critical_risks, models=("gemini-3
                 "error": "Missing GEMINI_API_KEY in .env", "plans": {}}
 
     last_err = ""
+    started = time.monotonic()
     for model_name in models:
+        remaining = TOTAL_BUDGET_S - (time.monotonic() - started)
+        if remaining < 3:  # not enough time left for a useful call
+            last_err = last_err or "timed out: AI time budget used up"
+            break
         try:
             from google import genai
             from google.genai import types
-            client = genai.Client(api_key=key)
+            client = genai.Client(
+                api_key=key,
+                http_options=types.HttpOptions(
+                    timeout=int(min(CALL_TIMEOUT_S, remaining) * 1000),  # milliseconds
+                    retry_options=types.HttpRetryOptions(attempts=1),  # no hidden retries
+                ),
+            )
             resp = client.models.generate_content(
                 model=model_name,
                 contents=prompt,

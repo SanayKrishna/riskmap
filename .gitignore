@@ -13,3 +13,6 @@ venv/
 *.csv
 ai_log.txt
 data/
+
+security_events.jsonl
+security_events.jsonl.tmp

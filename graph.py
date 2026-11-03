@@ -1,16 +1,8 @@
-"""Risk interdependency — link validation, cascade ranking, network chart."""
+"""Risk interdependency — link validation, cascade ranking, SVG dependency map."""
 
 import networkx as nx
 
 SEV_WEIGHT = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
-
-# marker palette mirrors the page chips: tinted fill, dark text, colored rim
-NODE_STYLE = {
-    "Critical": ("#FEF2F2", "#C41A1A", "#C41A1A"),
-    "High": ("#FFF4EE", "#B94008", "#B94008"),
-    "Medium": ("#FFFBEB", "#A35D0A", "#A35D0A"),
-    "Low": ("#F0FDF4", "#166534", "#166534"),
-}
 
 
 def validate_links(risks):
@@ -106,71 +98,124 @@ def chains_text(risks, max_depth=3):
     return sorted(set(lines))
 
 
+# ── Dependency map: server-rendered SVG ─────────────────────────────────────
+NODE_W, NODE_H = 212, 58
+COL_GAP, ROW_GAP, PAD = 96, 22, 24
+LABEL_H = 30  # caption row above the "not linked" nodes
+
+
+def _layers(g):
+    """Left-to-right layers (longest path from a source). Cycles are broken by
+    dropping back edges for layout only; those edges are still drawn."""
+    dag = nx.DiGraph(g)
+    while True:
+        try:
+            cyc = nx.find_cycle(dag)
+        except nx.NetworkXNoCycle:
+            break
+        dag.remove_edge(*cyc[-1][:2])
+    return [list(gen) for gen in nx.topological_generations(dag)]
+
+
+def _order_layers(layers, g, score):
+    """Order nodes inside each layer by the mean slot of their parents
+    (cuts crossings), then by score desc, id."""
+    slot = {}
+    for li, layer in enumerate(layers):
+        if li == 0:
+            layer.sort(key=lambda n: (-score.get(n, 0), n))
+        else:
+            def bary(n):
+                ps = [slot[p] for p in g.predecessors(n) if p in slot]
+                return sum(ps) / len(ps) if ps else 1e9
+            layer.sort(key=lambda n: (bary(n), -score.get(n, 0), n))
+        for k, n in enumerate(layer):
+            slot[n] = k
+    return layers
+
+
+def _clip(text, n):
+    text = text or ""
+    return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+
 def network_chart(analysis):
-    """Plotly dependency network, inline HTML div. Empty string if no links."""
-    from plotly.offline import plot
-    import plotly.graph_objects as go
+    """Dependency map as an inline SVG fragment. Empty string if no links."""
+    from html import escape
 
     risks = analysis.get("risks", [])
     if not any(r.get("triggers") for r in risks):
         return ""
     g = build_graph(risks)
-    # circular: even separation for every node (spring clusters chains)
-    pos = {n: (float(p[0]), float(p[1])) for n, p in nx.circular_layout(g).items()}
-    edge_x, edge_y = [], []
-    annotations = []
-    for a, b in g.edges:
-        x0, y0 = pos[a]
-        x1, y1 = pos[b]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
-        # shorten so the arrow tip lands on the target marker rim, not its center
-        dx, dy = x1 - x0, y1 - y0
-        annotations.append(
-            dict(
-                ax=x0 + 0.12 * dx, ay=y0 + 0.12 * dy,
-                x=x1 - 0.16 * dx, y=y1 - 0.16 * dy,
-                xref="x", yref="y", axref="x", ayref="y",
-                showarrow=True, arrowhead=2, arrowsize=1.1, arrowwidth=2,
-                arrowcolor="#6B7280", opacity=0.9,
-            )
+    by_id = {r["id"]: r for r in risks}
+    score = {r["id"]: r.get("score", 0) for r in risks}
+    linked_ids = {n for n in g.nodes if g.degree(n) > 0}
+    lone = [r for r in risks if r["id"] not in linked_ids]
+    sub = g.subgraph(linked_ids).copy()
+
+    layers = _order_layers(_layers(sub), sub, score)
+    tallest = max(len(layer) for layer in layers)
+    col_h = tallest * NODE_H + (tallest - 1) * ROW_GAP
+    pos = {}  # id -> (x, y) top-left corner
+    for li, layer in enumerate(layers):
+        x = PAD + li * (NODE_W + COL_GAP)
+        y0 = PAD + (col_h - (len(layer) * NODE_H + (len(layer) - 1) * ROW_GAP)) / 2
+        for k, n in enumerate(layer):
+            pos[n] = (x, y0 + k * (NODE_H + ROW_GAP))
+    width = PAD * 2 + len(layers) * NODE_W + (len(layers) - 1) * COL_GAP
+    height = PAD * 2 + col_h
+
+    # unlinked risks: a labelled row under the graph, wrapped to the graph width
+    lone_y0 = height
+    if lone:
+        per_row = max(1, int((width - PAD) // (NODE_W + 16)))
+        rows = -(-len(lone) // per_row)
+        for k, r in enumerate(lone):
+            pos[r["id"]] = (PAD + (k % per_row) * (NODE_W + 16),
+                            lone_y0 + LABEL_H + (k // per_row) * (NODE_H + ROW_GAP))
+        height = lone_y0 + LABEL_H + rows * (NODE_H + ROW_GAP) + PAD - ROW_GAP
+
+    out = [
+        f'<div class="depmap-wrap"><svg class="depmap" style="width:{width}px" '
+        f'viewBox="0 0 {width} {height}" role="img" '
+        f'aria-label="Risk dependency map: arrows point from a risk to the risks it triggers">',
+        '<defs><marker id="dep-arrow" viewBox="0 0 10 10" refX="9" refY="5" '
+        'markerWidth="9" markerHeight="9" orient="auto-start-reverse">'
+        '<path d="M0 0 L10 5 L0 10 z" class="dep-arrowhead"/></marker></defs>',
+    ]
+    # edges first so nodes sit on top of them. Right-angle connectors, like a schematic.
+    for k, (a, b) in enumerate(sub.edges):
+        ax, ay = pos[a]
+        bx, by = pos[b]
+        if bx > ax:  # forward: right edge -> left edge; stagger the vertical run per edge
+            sx, sy, tx, ty = ax + NODE_W, ay + NODE_H / 2, bx, by + NODE_H / 2
+            mx = sx + 24 + (k % 4) * 10 + ((bx - ax - NODE_W - COL_GAP) / (NODE_W + COL_GAP)) * 0
+            path = f"M{sx:.1f} {sy:.1f} H{mx:.1f} V{ty:.1f} H{tx:.1f}"
+        else:  # same column or back edge: exit the top, run above, drop into the target
+            sx, sy = ax + NODE_W / 2, ay
+            tx, ty = bx + NODE_W / 2, by
+            top = min(sy, ty) - (16 + (k % 3) * 8)
+            path = f"M{sx:.1f} {sy:.1f} V{top:.1f} H{tx:.1f} V{ty:.1f}"
+        out.append(
+            f'<path class="dep-edge" data-from="{escape(str(a))}" data-to="{escape(str(b))}" '
+            f'd="{path}" marker-end="url(#dep-arrow)"/>'
         )
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(x=edge_x, y=edge_y, mode="lines",
-                   line=dict(color="#8C8C8C", width=2),
-                   hoverinfo="skip", showlegend=False)
-    )
-    for node in g.nodes:
-        n = g.nodes[node]
-        down = sorted(nx.descendants(g, node))
-        fill, rim, text = NODE_STYLE.get(n.get("severity", "Low"), NODE_STYLE["Low"])
-        fig.add_trace(
-            go.Scatter(
-                x=[pos[node][0]], y=[pos[node][1]],
-                mode="markers+text",
-                marker=dict(color=fill, size=32,
-                            line=dict(color=rim, width=2)),
-                text=[node], textposition="middle center",
-                textfont=dict(color=text, size=11),
-                name=node,
-                hovertemplate=(
-                    f"<b>{node}</b> — {n.get('title', '')}<br>"
-                    f"Score {n.get('score', '')} ({n.get('severity', '')})<br>"
-                    + (f"Triggers: {', '.join(down)}" if down else "No downstream links")
-                    + "<extra></extra>"
-                ),
-                showlegend=False,
-            )
+    if lone:
+        out.append(f'<text class="dep-caption" x="{PAD}" y="{lone_y0 + 18}">NOT LINKED</text>')
+    for n, (x, y) in pos.items():
+        r = by_id[n]
+        sev = r.get("severity", "Low")
+        down = sorted(nx.descendants(g, n))
+        tip = (f'{n} — {r.get("title", "")}\nScore {r.get("score", "")} ({sev})\n'
+               + (f'Triggers: {", ".join(down)}' if down else "No downstream links"))
+        out.append(
+            f'<g class="dep-node sev-{escape(str(sev))}" data-id="{escape(str(n))}" '
+            f'transform="translate({x:.1f} {y:.1f})"><title>{escape(tip)}</title>'
+            f'<rect class="body" width="{NODE_W}" height="{NODE_H}"/>'
+            f'<rect class="bar" width="6" height="{NODE_H}"/>'
+            f'<text class="dep-id" x="18" y="23">{escape(str(n))}</text>'
+            f'<text class="dep-score" x="{NODE_W - 12}" y="23" text-anchor="end">{escape(str(r.get("score", "")))}</text>'
+            f'<text class="dep-title" x="18" y="43">{escape(_clip(str(r.get("title", "")), 27))}</text></g>'
         )
-    fig.update_layout(
-        title=f"{analysis.get('project_name', 'Project')} — Dependency Map",
-        margin=dict(l=20, r=20, t=60, b=20),
-        plot_bgcolor="white", paper_bgcolor="white",
-        hovermode="closest",
-        hoverlabel=dict(bgcolor="white", bordercolor="#D4D1C8",
-                        font=dict(family="Inter, sans-serif", size=13, color="#141414")),
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
-        annotations=annotations,
-    )
-    return plot(fig, output_type="div", include_plotlyjs=False)
+    out.append("</svg></div>")
+    return "".join(out)
