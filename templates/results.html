@@ -117,7 +117,7 @@
           <td class="num muted">{{ r.priority_rank }}</td>
           <td><span class="mono">{{ r.id }}</span></td>
           <td>
-            <b>{{ r.title }}</b>
+            <b>{{ r.title }}</b>{% if r.anomaly %}<span class="anomaly" tabindex="0" role="img" title="{{ r.anomaly.detail }}" aria-label="Anomaly: {{ r.anomaly.detail }}">⚠</span>{% endif %}
             {% if r.triggers %}<small>Triggers {{ r.triggers|join(', ') }}</small>{% endif %}
             {% if r.description %}<small>{{ r.description }}</small>{% endif %}
           </td>

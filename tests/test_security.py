@@ -20,6 +20,7 @@ RISKS = [
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SECURITY_LOG_PATH", str(tmp_path / "events.jsonl"))
     monkeypatch.setenv("RISK_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("RISK_ALERTS_PATH", str(tmp_path / "alerts.jsonl"))
     import app as app_module
     app_module.limiter.reset()
     app_module.limiter.enabled = True

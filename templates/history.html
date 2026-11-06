@@ -81,6 +81,32 @@
   </div>
 {% endcall %}
 
+{% if anomalies %}
+{% call card("Anomaly report", "", "risks behaving unlike their own history", True) %}
+  <div class="table-scroll" style="max-height:340px">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Risk</th><th>Type</th><th class="num">Z-score</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for a in anomalies %}
+        <tr>
+          <td><span class="mono">{{ a.risk_id }}</span></td>
+          <td><b>{{ a.risk_title }}</b></td>
+          <td>
+            {% if a.anomaly_type == 'STATISTICAL_OUTLIER' %}<span class="pill b-Critical">Statistical outlier</span>
+            {% else %}<span class="pill b-High">Monotonic rise</span>{% endif %}
+          </td>
+          <td class="num">{% if a.z_score is not none %}{{ "%.2f"|format(a.z_score) }}{% else %}<span class="muted">n/a</span>{% endif %}</td>
+          <td>{{ a.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+{% endif %}
+
 {% call card("Snapshots", "", "signed when saved, checked when loaded", True) %}
   <div class="table-scroll" style="max-height:340px">
     <table>

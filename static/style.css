@@ -344,3 +344,7 @@ tr[class^=sev-] td:first-child { box-shadow: inset 3px 0 0 var(--c) }
   .card-b { padding: var(--s4) }
   .card-h { padding: var(--s3) var(--s4) }
 }
+
+/* ---- Risk anomaly marker (report register) ---- */
+.anomaly { display: inline-block; margin-left: 6px; font-size: 12px; line-height: 1; color: var(--accent); cursor: help; vertical-align: 1px; border-radius: 4px; padding: 1px 3px }
+.anomaly:hover, .anomaly:focus-visible { background: var(--accent-tint) }
