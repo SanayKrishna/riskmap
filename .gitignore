@@ -16,3 +16,5 @@ data/
 
 security_events.jsonl
 security_events.jsonl.tmp
+risk_alerts.jsonl
+risk_alerts.jsonl.tmp

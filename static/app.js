@@ -88,7 +88,7 @@
     btn.addEventListener('click', function () {
       filters.forEach(function (b) { b.classList.toggle('on', b === btn); });
       var want = btn.dataset.sev;
-      $$('.sec-table tbody tr').forEach(function (tr) {
+      $$('.sec-table tbody tr[data-sev]').forEach(function (tr) {
         tr.hidden = !!want && tr.dataset.sev !== want;
       });
     });

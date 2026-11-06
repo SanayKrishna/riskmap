@@ -36,6 +36,30 @@
   {% endcall %}
 </div>
 
+{% call card("Active risk alerts", "alerts", "last 48 hours, up to 20", True) %}
+  {% if active_alerts %}
+  <div class="table-scroll" style="max-height:340px">
+    <table class="sec-table">
+      <thead>
+        <tr><th>Time</th><th>Project</th><th>Risk</th><th>Alert type</th><th>Severity</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for a in active_alerts %}
+        <tr>
+          <td class="sec-time">{{ a.timestamp[:19]|replace('T', ' ') }}</td>
+          <td>{{ a.project_name }}</td>
+          <td><span class="mono">{{ a.risk_id }}</span></td>
+          <td class="sec-type">{{ a.alert_type }}</td>
+          <td><span class="pill b-{{ 'Critical' if a.severity == 'CRITICAL' else 'High' }}">{{ a.severity|title }}</span></td>
+          <td class="sec-detail">{{ a.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="sec-empty">No risk alerts in the last 48 hours.</p>{% endif %}
+{% endcall %}
+
 {% call card("Recent events", "", "newest first, up to 100", True) %}
   {% if events %}
   <div class="filters" role="group" aria-label="Filter by severity">

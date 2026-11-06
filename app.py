@@ -5,7 +5,7 @@ import os
 import re
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, send_file, redirect, url_for
+from flask import Flask, jsonify, render_template, request, send_file, redirect, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
@@ -20,7 +20,9 @@ from heatmap import generate_heatmap
 from ai_planner import generate_response_plans
 from exporter import to_csv_bytes
 from graph import cascade_ranking, chains_text, isolated_nodes, network_chart, validate_links
-from velocity import compute_trends, list_snapshots, save_snapshot, trend_chart
+from velocity import compute_trends, list_snapshots, save_snapshot, snapshot_integrity, trend_chart
+from alerting import check_and_alert, get_alerts
+from anomaly import detect_anomalies, label_risks
 from security_logger import count_today, get_events, get_summary, log_event
 from security_charts import timeline_chart, type_breakdown_chart
 from validation import (
@@ -134,6 +136,50 @@ def _log_ai_failure(ai):
               reason=ai.get("reason", "error"), error=err[:200])
 
 
+# Alerting and anomaly detection are non-critical extras: any failure in them is
+# swallowed so it can never block a route.
+def _anomalies_for(project, current_risks=None):
+    """Anomalies in a project's latest snapshot. When current_risks is given (the
+    analysis being viewed, not yet saved) it counts as the newest data point."""
+    try:
+        snaps = list_snapshots(project)
+        # Skip the current analysis if it matches the newest saved snapshot, otherwise
+        # the same data point would be counted twice and dilute a real spike.
+        if current_risks is not None and not (snaps and _same_scores(snaps[-1].get("risks"), current_risks)):
+            snaps = snaps + [{"label": "current", "risks": current_risks}]
+        return detect_anomalies(snaps)
+    except Exception:
+        return []
+
+
+def _same_scores(a, b):
+    def key(risks):
+        return sorted((str(r.get("id")), r.get("probability"), r.get("impact"))
+                      for r in (risks or []) if isinstance(r, dict))
+    return key(a) == key(b)
+
+
+def _alert_on_snapshot(project, snaps):
+    """Compare the snapshot just saved with the one before it. Returns alerts fired."""
+    try:
+        if len(snaps) < 2:
+            return []
+        old, new = snaps[-2], snaps[-1]
+        # only alert on a verified new snapshot, and never against a tampered baseline
+        if snapshot_integrity(new) != "verified" or snapshot_integrity(old) == "tampered":
+            return []
+        return check_and_alert(project, old, new, request)
+    except Exception:
+        return []
+
+
+def _active_alerts():
+    try:
+        return get_alerts(limit=20, since_hours=48)
+    except Exception:
+        return []
+
+
 def _parse_incoming(form, files):
     """Return (project_name, manager, date, currency, risks_list). Raises ValueError."""
     pasted = (form.get("pasted_json") or "").strip()
@@ -185,6 +231,10 @@ def analyze():
         project_name, manager, date, currency, risks = _parse_incoming(request.form, request.files)
         validate_links(risks)
         analysis = analyze_risks(project_name, manager, date, risks, currency=currency)
+        try:  # flag risks that deviate from their own history (needs saved snapshots)
+            analysis["risks"] = label_risks(analysis["risks"], _anomalies_for(project_name, risks))
+        except Exception:
+            pass
         heatmap_div = generate_heatmap(analysis)
         cascade = cascade_ranking(analysis["risks"])
         network_div = network_chart(analysis)
@@ -265,7 +315,7 @@ def _history_view(project, error=None):
     _log_integrity(project, data["snapshots"])
     div = trend_chart(project) if data["snapshots"] else ""
     return render_template("history.html", project=project, data=data,
-                           trend_div=div, error=error)
+                           trend_div=div, error=error, anomalies=_anomalies_for(project))
 
 
 def _log_integrity(project, snapshots):
@@ -322,9 +372,10 @@ def snapshot():
             snap_date = snap_date or LAST["analysis"].get("date", "")
         if not project:
             raise ValueError("project name is missing.")
-        save_snapshot(project, label, snap_date, risks, currency=currency)
+        snaps = save_snapshot(project, label, snap_date, risks, currency=currency)
         _safe_log("SNAPSHOT_SAVED", "INFO", f"snapshot {label!r} saved for {project!r}",
                   project=project, label=label, risks=len(risks))
+        _alert_on_snapshot(project, snaps)
         return redirect(url_for("history", project=project))
     except ValueError as exc:
         etype = getattr(exc, "event_type", "UPLOAD_REJECTED")
@@ -348,6 +399,7 @@ def _security_view(error=None):
         timeline_div=timeline_chart(),
         types_div=type_breakdown_chart(),
         events=get_events(limit=100),
+        active_alerts=_active_alerts(),
     )
 
 
@@ -355,6 +407,16 @@ def _security_view(error=None):
 @limiter.limit("30/minute")
 def security():
     return _security_view()
+
+
+@app.get("/alerts")
+@limiter.limit("30/minute")
+def alerts():
+    """Read-only JSON API: risk alert history, newest first (max 200).
+    ?project=<name> narrows it to one project."""
+    project = (request.args.get("project") or "").strip() or None
+    found = get_alerts(project_name=project, limit=200)
+    return jsonify({"project": project, "count": len(found), "alerts": found})
 
 
 # ── Security error handlers ─────────────────────────────────────────────────
@@ -368,6 +430,8 @@ def _error_page(message, status):
             pass
     elif request.endpoint == "security":
         return _security_view(error=message), status
+    elif request.endpoint == "alerts":  # API endpoint: answer in JSON, not HTML
+        return jsonify({"error": message}), status
     return render_template("upload.html", error=message), status
 
 
