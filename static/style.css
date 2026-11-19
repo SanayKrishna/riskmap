@@ -348,3 +348,11 @@ tr[class^=sev-] td:first-child { box-shadow: inset 3px 0 0 var(--c) }
 /* ---- Risk anomaly marker (report register) ---- */
 .anomaly { display: inline-block; margin-left: 6px; font-size: 12px; line-height: 1; color: var(--accent); cursor: help; vertical-align: 1px; border-radius: 4px; padding: 1px 3px }
 .anomaly:hover, .anomaly:focus-visible { background: var(--accent-tint) }
+
+/* ---- Correlated incidents + log ingestion (security page) ---- */
+.stat-strip-2 { margin-top: var(--s4) }
+.stat-flag.on b { color: var(--crit) }
+.sec-table td.sec-count { font: 600 13px var(--mono); font-variant-numeric: tabular-nums; text-align: center }
+.ingest-sub { font: 600 12.5px var(--body); color: var(--muted); margin: var(--s6) 0 var(--s3) }
+.ingest-msg { font-size: 13px; color: var(--ink-2); margin-left: var(--s3) }
+.ingest-msg.bad { color: var(--crit) }

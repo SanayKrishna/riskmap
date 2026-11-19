@@ -24,6 +24,8 @@ from velocity import compute_trends, list_snapshots, save_snapshot, snapshot_int
 from alerting import check_and_alert, get_alerts
 from anomaly import detect_anomalies, label_risks
 from security_logger import count_today, get_events, get_summary, log_event
+from log_ingestor import MAX_LINES, ingest_lines
+from correlator import get_incident_summary, get_incidents, run_correlation
 from security_charts import timeline_chart, type_breakdown_chart
 from validation import (
     MAX_UPLOAD_BYTES, parse_json, read_upload, validate_project_fields, validate_risks,
@@ -386,9 +388,32 @@ def snapshot():
 
 
 # ── Security dashboard ──────────────────────────────────────────────────────
+def _recent_incidents():
+    try:
+        return get_incidents(limit=20, since_hours=72)
+    except Exception:
+        return []
+
+
+def _incident_totals():
+    try:
+        s = get_incident_summary()
+        return s["all_time"]["total"], s["last_24h"]["by_severity"].get("CRITICAL", 0)
+    except Exception:
+        return 0, 0
+
+
+def _recent_ingested():
+    try:
+        return get_events(limit=5, event_type_filter="INGESTED_LOG")
+    except Exception:
+        return []
+
+
 def _security_view(error=None):
     summary = get_summary()
     recent = summary["last_24h"]["by_severity"]
+    incidents_total, incidents_critical_24h = _incident_totals()
     return render_template(
         "security.html",
         error=error,
@@ -400,6 +425,11 @@ def _security_view(error=None):
         types_div=type_breakdown_chart(),
         events=get_events(limit=100),
         active_alerts=_active_alerts(),
+        incidents=_recent_incidents(),
+        incidents_total=incidents_total,
+        incidents_critical_24h=incidents_critical_24h,
+        ingested_total=summary["all_time"]["by_type"].get("INGESTED_LOG", 0),
+        ingested_recent=_recent_ingested(),
     )
 
 
@@ -419,6 +449,42 @@ def alerts():
     return jsonify({"project": project, "count": len(found), "alerts": found})
 
 
+@app.post("/ingest")
+@limiter.limit("10/minute")
+def ingest():
+    """Parse external log lines into security events. Takes a file upload (form field
+    'log_file') or a JSON body {"logs": [..raw lines..]}.
+    Answers {"ingested": N, "skipped": M, "errors": [...]}."""
+    try:
+        uploaded = request.files.get("log_file")
+        if uploaded and getattr(uploaded, "filename", ""):
+            _name, text = read_upload(uploaded)  # 512 KB, text/plain or application/json
+            lines = text.splitlines()
+        else:
+            body = request.get_json(silent=True)
+            lines = body.get("logs") if isinstance(body, dict) else None
+            if not isinstance(lines, list):
+                raise ValueError('send a log file, or a JSON body like {"logs": ["line", ...]}.')
+        return jsonify(ingest_lines(lines, request, max_lines=MAX_LINES))
+    except ValueError as exc:
+        etype = getattr(exc, "event_type", "UPLOAD_REJECTED")
+        _safe_log(etype, getattr(exc, "severity", "WARN"), str(exc), endpoint="ingest")
+        return jsonify({"ingested": 0, "skipped": 0, "errors": [str(exc)]}), (413 if etype == "OVERSIZED_UPLOAD" else 400)
+    except Exception:  # never leak tracebacks
+        return jsonify({"ingested": 0, "skipped": 0, "errors": ["Could not ingest those logs."]}), 500
+
+
+@app.post("/correlate")
+@limiter.limit("20/minute")
+def correlate():
+    """Run every correlation rule now. Answers with the incidents fired by this run."""
+    try:
+        fired = run_correlation()
+        return jsonify({"count": len(fired), "incidents": fired})
+    except Exception:
+        return jsonify({"error": "Correlation failed."}), 500
+
+
 # ── Security error handlers ─────────────────────────────────────────────────
 def _error_page(message, status):
     """Re-render the page the request came from, with an inline error."""
@@ -431,6 +497,10 @@ def _error_page(message, status):
     elif request.endpoint == "security":
         return _security_view(error=message), status
     elif request.endpoint == "alerts":  # API endpoint: answer in JSON, not HTML
+        return jsonify({"error": message}), status
+    elif request.endpoint == "ingest":
+        return jsonify({"ingested": 0, "skipped": 0, "errors": [message]}), status
+    elif request.endpoint == "correlate":
         return jsonify({"error": message}), status
     return render_template("upload.html", error=message), status
 

@@ -10,6 +10,29 @@
     $$('.js-plotly-plot').forEach(function (el) { window.Plotly.Plots.resize(el); });
   });
 
+  /* ── Security page: ingest a log file without leaving the page ── */
+  var ingestForm = $('#ingestForm');
+  if (ingestForm && window.fetch && window.FormData) {
+    ingestForm.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var msg = $('#ingestMsg'), btn = $('button[type=submit]', ingestForm);
+      var show = function (text, bad) { msg.textContent = text; msg.className = 'ingest-msg' + (bad ? ' bad' : ''); };
+      btn.disabled = true; show('Ingesting…', false);
+      fetch(ingestForm.action, { method: 'POST', body: new FormData(ingestForm), headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (res.ok) {
+            show('Ingested ' + res.d.ingested + ' lines, skipped ' + res.d.skipped +
+                 (res.d.errors && res.d.errors.length ? ' (' + res.d.errors[0] + ')' : '') + '. Refresh to see them below.', false);
+          } else {
+            show((res.d.errors && res.d.errors[0]) || 'Could not ingest that file.', true);
+          }
+        })
+        .catch(function () { show('Could not reach the server.', true); })
+        .then(function () { btn.disabled = false; });
+    });
+  }
+
   /* ── Sortable tables: <th data-sort="num|text"> ── */
   $$('table').forEach(function (table) {
     var heads = $$('th[data-sort]', table);

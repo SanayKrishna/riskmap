@@ -7,13 +7,14 @@ permission problem must never take a route down.
 import json
 import os
 import threading
+import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 EVENT_TYPES = (
     "UPLOAD_REJECTED", "RATE_LIMITED", "OVERSIZED_UPLOAD", "INVALID_JSON",
     "CSRF_VIOLATION", "AI_FAILURE", "SNAPSHOT_SAVED", "SNAPSHOT_TAMPERED",
-    "SNAPSHOT_VERIFIED",
+    "SNAPSHOT_VERIFIED", "RISK_ALERT", "INGESTED_LOG", "CORRELATION_INCIDENT",
 )
 SEVERITIES = ("INFO", "WARN", "CRITICAL")
 RETENTION_DAYS = 30
@@ -84,6 +85,7 @@ def log_event(event_type, severity, request=None, detail="", metadata=None):
         if severity not in SEVERITIES:
             severity = "WARN"
         entry = {
+            "id": uuid.uuid4().hex[:12],  # lets correlation incidents point at exact events
             "timestamp": _now().isoformat(timespec="seconds"),
             "event_type": str(event_type),
             "severity": severity,
@@ -100,6 +102,12 @@ def log_event(event_type, severity, request=None, detail="", metadata=None):
                 pass  # pruning is best-effort; still try to record the event
             with open(path, "a", encoding="utf-8") as f:
                 f.write(line)
+        try:  # correlation is an extra: it can never stop an event being logged
+            import correlator
+            if entry["event_type"] in correlator.TRIGGER_TYPES:
+                correlator.run_correlation()
+        except Exception:
+            pass
         return entry
     except Exception:
         return None

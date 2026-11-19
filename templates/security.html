@@ -24,6 +24,12 @@
   <div class="stat"><span>Events today</span><b>{{ today }}</b><small>since midnight</small></div>
 </div>
 
+<div class="stat-strip stat-strip-2">
+  <div class="stat"><span>Correlated incidents</span><b>{{ incidents_total }}</b><small>all time</small></div>
+  <div class="stat stat-flag {{ 'on' if incidents_critical_24h }}"><span>Critical incidents</span><b>{{ incidents_critical_24h }}</b><small>last 24 hours</small></div>
+  <div class="stat"><span>Ingested log lines</span><b>{{ ingested_total }}</b><small>all time</small></div>
+</div>
+
 <div class="row r-7-5" style="margin-top:24px">
   {% call card("Events per hour", "", "last 24 hours, by severity") %}
     {% if timeline_div %}<div class="plotly-div">{{ timeline_div|safe }}</div>
@@ -35,6 +41,30 @@
     {% else %}<p class="sec-empty" style="padding:0">Nothing recorded yet.</p>{% endif %}
   {% endcall %}
 </div>
+
+{% call card("Correlated incidents", "incidents", "last 72 hours, up to 20", True) %}
+  {% if incidents %}
+  <div class="table-scroll" style="max-height:340px">
+    <table class="sec-table">
+      <thead>
+        <tr><th>Time</th><th>Type</th><th>Severity</th><th>Source IP / Project</th><th>Matched events</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for i in incidents %}
+        <tr>
+          <td class="sec-time">{{ i.timestamp[:19]|replace('T', ' ') }}</td>
+          <td class="sec-type">{{ i.incident_type }}</td>
+          <td><span class="pill b-{{ 'Critical' if i.severity == 'CRITICAL' else 'High' }}">{{ i.severity|title }}</span></td>
+          <td class="sec-ip">{% if i.project %}{{ i.project }}{% else %}{{ i.source_ip }}{% endif %}</td>
+          <td class="sec-count">{{ i.matched_event_count }}</td>
+          <td class="sec-detail">{{ i.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="sec-empty">No correlated incidents in the last 72 hours</p>{% endif %}
+{% endcall %}
 
 {% call card("Active risk alerts", "alerts", "last 48 hours, up to 20", True) %}
   {% if active_alerts %}
@@ -88,6 +118,38 @@
     </table>
   </div>
   {% else %}<p class="sec-empty">No events recorded.</p>{% endif %}
+{% endcall %}
+
+{% call card("Log ingestion", "ingest", "syslog, access log or JSON lines") %}
+  <form id="ingestForm" method="post" action="/ingest" enctype="multipart/form-data" style="max-width:680px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="logFile" style="margin-top:0">Log file</label>
+    <input type="file" id="logFile" name="log_file" accept=".txt,.json,text/plain,application/json" required>
+    <p class="muted" style="font-size:12.5px;margin-top:8px">Plain text or JSON, up to 512 KB. The first 500 lines are read.</p>
+    <div class="btn-row" style="margin-top:20px">
+      <button type="submit" class="btn btn-primary">Ingest logs</button>
+      <span id="ingestMsg" class="ingest-msg" role="status" aria-live="polite"></span>
+    </div>
+  </form>
+  <h3 class="ingest-sub">Last 5 ingested lines</h3>
+  {% if ingested_recent %}
+  <div class="table-scroll">
+    <table class="sec-table">
+      <thead><tr><th>Time</th><th>Severity</th><th>IP</th><th>Detail</th></tr></thead>
+      <tbody>
+        {% for e in ingested_recent %}
+        {% set sev = {'CRITICAL': 'Critical', 'WARN': 'High', 'INFO': 'Low'}.get(e.severity, 'Low') %}
+        <tr>
+          <td class="sec-time">{{ e.timestamp[:19]|replace('T', ' ') }}</td>
+          <td><span class="pill b-{{ sev }}">{{ e.severity|title }}</span></td>
+          <td class="sec-ip">{{ e.source_ip }}</td>
+          <td class="sec-detail">{{ e.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="sec-empty" style="padding:0">Nothing ingested yet.</p>{% endif %}
 {% endcall %}
 
 {% endblock %}
