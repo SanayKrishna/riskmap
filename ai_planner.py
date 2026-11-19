@@ -109,7 +109,7 @@ def _classify_error(msg):
 def generate_response_plans(project_name, high_critical_risks, models=(
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
-            "gemini-2.0-flash",
+            "gemini-3.8-flash",
         ), chains=None):
     """Call Gemini for High/Critical risks only. Tries each model in order.
 
