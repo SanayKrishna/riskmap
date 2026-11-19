@@ -91,6 +91,14 @@ def _nonce_inline_scripts(resp):
     return resp
 
 
+# TEMPORARY: confirms the platform injected the AI key. Booleans only, never the value.
+# Remove once the Vercel env var issue is settled.
+@app.route("/debug-env")
+def debug_env():
+    return {"GEMINI_API_KEY_SET": bool(os.getenv("GEMINI_API_KEY")),
+            "GOOGLE_API_KEY_SET": bool(os.getenv("GOOGLE_API_KEY"))}
+
+
 @app.get("/plotly.min.js")
 def plotly_js():
     """Serve plotly.js from the installed package so no external script origin is needed."""
