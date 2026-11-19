@@ -15,8 +15,11 @@ ALLOWED_STRATEGIES = ("Avoid", "Mitigate", "Transfer", "Accept")
 
 # The AI step is optional, so it must never hold the page hostage. Without these
 # limits one slow model call can block for minutes (seen: 127 s before a 503).
-CALL_TIMEOUT_S = float(os.getenv("GEMINI_CALL_TIMEOUT_S", "15"))   # per model call
-TOTAL_BUDGET_S = float(os.getenv("GEMINI_TOTAL_BUDGET_S", "25"))   # across all models (stops starting new ones)
+CALL_TIMEOUT_S = float(os.getenv("GEMINI_CALL_TIMEOUT_S", "20"))   # per model call
+# Across all calls (stops starting new ones). Room for one full call, the retry pause
+# and one full retry: 20 + 2 + 20, plus a little slack.
+TOTAL_BUDGET_S = float(os.getenv("GEMINI_TOTAL_BUDGET_S", "45"))
+RETRY_DELAY_S = 2.0  # pause before the single retry after a timeout or 503
 
 
 def _api_key():
@@ -126,45 +129,50 @@ def generate_response_plans(project_name, high_critical_risks, models=("gemini-3
     last_err = ""
     started = time.monotonic()
     for model_name in models:
-        remaining = TOTAL_BUDGET_S - (time.monotonic() - started)
-        if remaining < 3:  # not enough time left for a useful call
-            last_err = last_err or "timed out: AI time budget used up"
-            break
-        try:
-            from google import genai
-            from google.genai import types
-            client = genai.Client(
-                api_key=key,
-                http_options=types.HttpOptions(
-                    timeout=int(min(CALL_TIMEOUT_S, remaining) * 1000),  # milliseconds
-                    retry_options=types.HttpRetryOptions(attempts=1),  # no hidden retries
-                ),
-            )
-            resp = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.3,
-                ),
-            )
-            raw = getattr(resp, "text", "") or ""
-            _log(prompt, raw)
-            # strip code fences if model adds them despite instructions
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.strip("`")
-                # remove leading 'json' marker
-                if cleaned.lower().startswith("json"):
-                    cleaned = cleaned[4:]
-                cleaned = cleaned.strip()
-            plans = _normalize(json.loads(cleaned))
-            return {"available": True, "reason": "", "plans": plans, "model": model_name}
-        except Exception as exc:  # noqa: BLE001 — try next model, never crash the page
-            last_err = str(exc)[:300]
+        for attempt in (1, 2):  # one retry, only after a timeout or 503
+            remaining = TOTAL_BUDGET_S - (time.monotonic() - started)
+            if remaining < 3:  # not enough time left for a useful call
+                last_err = last_err or "timed out: AI time budget used up"
+                break
             try:
-                _log(prompt, f"ERROR [{model_name}]: {exc}")
-            except Exception:
-                pass
+                from google import genai
+                from google.genai import types
+                client = genai.Client(
+                    api_key=key,
+                    http_options=types.HttpOptions(
+                        timeout=int(min(CALL_TIMEOUT_S, remaining) * 1000),  # milliseconds
+                        retry_options=types.HttpRetryOptions(attempts=1),  # no hidden retries
+                    ),
+                )
+                resp = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.3,
+                    ),
+                )
+                raw = getattr(resp, "text", "") or ""
+                _log(prompt, raw)
+                # strip code fences if model adds them despite instructions
+                cleaned = raw.strip()
+                if cleaned.startswith("```"):
+                    cleaned = cleaned.strip("`")
+                    # remove leading 'json' marker
+                    if cleaned.lower().startswith("json"):
+                        cleaned = cleaned[4:]
+                    cleaned = cleaned.strip()
+                plans = _normalize(json.loads(cleaned))
+                return {"available": True, "reason": "", "plans": plans, "model": model_name}
+            except Exception as exc:  # noqa: BLE001 — try next model, never crash the page
+                last_err = str(exc)[:300]
+                try:
+                    _log(prompt, f"ERROR [{model_name}] attempt {attempt}: {exc}")
+                except Exception:
+                    pass
+                if attempt == 1 and _classify_error(last_err) in ("timeout", "overloaded"):
+                    time.sleep(RETRY_DELAY_S)
+                    continue
+                break
     return {"available": False, "reason": _classify_error(last_err),
             "error": last_err, "plans": {}}
